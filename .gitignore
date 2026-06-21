@@ -1,0 +1,6 @@
+# TAUSIK
+.tausik/
+
+__pycache__/
+*.pyc
+*.pyo
