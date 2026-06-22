@@ -7,6 +7,7 @@ import Messages from "./pages/Messages";
 import Orders from "./pages/Orders";
 import Plugins from "./pages/Plugins";
 import PluginDetail from "./pages/PluginDetail";
+import Help from "./pages/Help";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="orders" element={<Orders />} />
           <Route path="plugins" element={<Plugins />} />
           <Route path="plugins/:name" element={<PluginDetail />} />
+          <Route path="help" element={<Help />} />
         </Route>
       </Routes>
     </BrowserRouter>
