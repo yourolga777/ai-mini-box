@@ -34,5 +34,8 @@ jobs:
         run: pip install pytest pytest-cov httpx
 
       - name: Run tests
-        run: pytest packages/core/tests/ packages/demo/tests/ packages/web/tests/ -v --cov
+        run: |
+          pytest packages/core/tests/ -v --cov
+          pytest packages/demo/tests/ -v --cov
+          pytest packages/web/tests/ -v --cov
 
