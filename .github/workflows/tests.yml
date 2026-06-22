@@ -35,3 +35,4 @@ jobs:
 
       - name: Run tests
         run: pytest packages/core/tests/ packages/demo/tests/ packages/web/tests/ -v --cov
+
