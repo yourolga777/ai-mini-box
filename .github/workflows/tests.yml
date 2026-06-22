@@ -27,8 +27,11 @@ jobs:
       - name: Install demo package
         run: pip install -e packages/demo/
 
+      - name: Install web package
+        run: pip install -e packages/web/
+
       - name: Install test tools
         run: pip install pytest pytest-cov
 
       - name: Run tests
-        run: pytest packages/core/tests/ packages/demo/tests/ -v --cov
+        run: pytest packages/core/tests/ packages/demo/tests/ packages/web/tests/ -v --cov

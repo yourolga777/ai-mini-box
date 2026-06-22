@@ -44,6 +44,8 @@ ai-mini-box config unset poll_interval
 |---------|----------|
 | `init` | Создать config.json, БД, директории data/ |
 | `check-db` | Проверить подключение к БД и схему |
+| `db upgrade` | Применить миграции БД (Alembic) |
+| `config list` | Показать все доступные ключи с типами и дефолтами |
 | `config show` | Показать конфигурацию (с группировкой по секциям) |
 | `config set <key> <value>` | Установить значение (чувствительные поля шифруются) |
 | `config unset <key>` | Сбросить на значение по умолчанию |
@@ -56,7 +58,7 @@ ai-mini-box config unset poll_interval
 | `demo-get <id>` | Контакт по ID |
 | `demo-add <name> <phone>` | Добавить контакт |
 
-Опции: `--verbose`, `--help` доступны для всех команд.
+Опции: `--verbose`, `--log-file <path>`, `--help` доступны для всех команд. Автодополнение: `ai-mini-box --install-completion`.
 
 ## Архитектура
 

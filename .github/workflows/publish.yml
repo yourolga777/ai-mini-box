@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+      - "web-*"
 
 jobs:
   publish:
@@ -13,26 +14,43 @@ jobs:
         package:
           - path: packages/core
             name: ai-mini-box-core
-          # Add new services here:
-          # - path: packages/telegram
-          #   name: ai-mini-box-telegram
+            tag_prefix: "v"
+          - path: packages/web
+            name: ai-mini-box-web
+            tag_prefix: "web-v"
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check tag match
+        id: check
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          PREFIX="${{ matrix.package.tag_prefix }}"
+          if [[ "$TAG" == "$PREFIX"* ]]; then
+            echo "match=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "match=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Python
+        if: steps.check.outputs.match == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install build tools
+        if: steps.check.outputs.match == 'true'
         run: pip install hatchling build
 
       - name: Build ${{ matrix.package.name }}
+        if: steps.check.outputs.match == 'true'
         run: python -m build
         working-directory: ${{ matrix.package.path }}
 
       - name: Publish to PyPI
+        if: steps.check.outputs.match == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_TOKEN }}

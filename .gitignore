@@ -4,3 +4,12 @@
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
+dist/
+build/
+.env
+*.db
+migrations/versions/
+!migrations/versions/.gitkeep
+data/
+.DS_Store
