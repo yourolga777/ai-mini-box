@@ -26,7 +26,16 @@ export default function Layout() {
             {l.label}
           </NavLink>
         ))}
-        <div className="mt-auto pt-4 border-t border-gray-700">
+        <div className="mt-auto pt-4 border-t border-gray-700 space-y-1">
+          <NavLink
+            to="/architecture"
+            end
+            className={({ isActive }) =>
+              `px-3 py-2 rounded transition ${isActive ? "bg-blue-600" : "hover:bg-gray-700"}`
+            }
+          >
+            Architecture
+          </NavLink>
           <NavLink
             to="/help"
             end
