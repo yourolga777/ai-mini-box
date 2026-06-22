@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-mini-box-demo"
+version = "0.1.0"
+description = "Demo service for ai-mini-box-core"
+requires-python = ">=3.12"
+dependencies = [
+    "ai-mini-box-core>=5.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.entry-points."ai_mini_box.tools"]
+demo = "ai_mini_box_demo.commands:register"
+
+[tool.hatch.build]
+include = ["ai_mini_box_demo/**"]

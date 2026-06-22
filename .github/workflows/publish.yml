@@ -1,0 +1,39 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package:
+          - path: packages/core
+            name: ai-mini-box-core
+          # Add new services here:
+          # - path: packages/telegram
+          #   name: ai-mini-box-telegram
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install hatchling build
+
+      - name: Build ${{ matrix.package.name }}
+        run: python -m build
+        working-directory: ${{ matrix.package.path }}
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
+          packages-dir: ${{ matrix.package.path }}/dist
