@@ -31,7 +31,7 @@ jobs:
         run: pip install -e packages/web/
 
       - name: Install test tools
-        run: pip install pytest pytest-cov
+        run: pip install pytest pytest-cov httpx
 
       - name: Run tests
         run: pytest packages/core/tests/ packages/demo/tests/ packages/web/tests/ -v --cov
