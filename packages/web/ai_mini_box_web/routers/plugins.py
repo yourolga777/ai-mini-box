@@ -24,9 +24,42 @@ class InstallRequest(BaseModel):
     package: str
 
 
+class ActionRequest(BaseModel):
+    action: str
+
+
+class ConfigSetRequest(BaseModel):
+    key: str
+    value: str
+
+
+# --- config (must be before /{name} to avoid path param conflict) ---
+
+@router.get("/config")
+def get_config():
+    return _manager.get_config()
+
+
+@router.post("/config/set")
+def set_config(body: ConfigSetRequest):
+    result = _manager.set_config(body.key, body.value)
+    if not result["success"]:
+        raise HTTPException(400, detail=result.get("error", "Unknown error"))
+    return result
+
+
+# --- plugin CRUD ---
+
 @router.get("")
 def list_plugins():
     return _manager.list_plugins()
+
+
+@router.get("/check/package")
+def check_package(package: str):
+    if not PACKAGE_RE.match(package):
+        raise HTTPException(400, detail="Invalid package name. Must match ai-mini-box-* or ai_mini_box_*")
+    return {"installed": _manager.check_installed(package)}
 
 
 @router.get("/{name}")
@@ -35,13 +68,6 @@ def get_plugin(name: str):
     if plugin is None:
         raise HTTPException(404, detail=f"Plugin '{name}' not found")
     return plugin
-
-
-@router.get("/check/package")
-def check_package(package: str):
-    if not PACKAGE_RE.match(package):
-        raise HTTPException(400, detail=f"Invalid package name. Must match ai-mini-box-* or ai_mini_box_*")
-    return {"installed": _manager.check_installed(package)}
 
 
 @router.post("/install")
@@ -55,10 +81,9 @@ async def install_pypi(body: InstallRequest, request: Request):
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, _manager.install_from_pypi, package)
 
-    logger_kw = dict(pkg=package, source="pypi", ip=request.client.host, success=result["success"])
-    logger_kw["output"] = result["output"][:500]
     from loguru import logger
-    logger.info("Plugin install | pkg={pkg} source={source} ip={ip} success={success}", **logger_kw)
+    logger.info("Plugin install | pkg={} source={} ip={} success={}",
+                package, "pypi", request.client.host, result["success"])
 
     if result["success"]:
         asyncio.create_task(_delayed_reload())
@@ -107,20 +132,75 @@ def uninstall_plugin(name: str, request: Request = None):
     return result
 
 
-@router.post("/{name}/start", status_code=501)
-def start_plugin(name: str):
-    return {"detail": "Plugin lifecycle management not yet implemented"}
+@router.post("/{name}/start")
+def start_plugin_daemon(name: str):
+    plugin = _manager.get_plugin(name)
+    if not plugin:
+        raise HTTPException(404, detail=f"Plugin '{name}' not found")
+
+    result = _manager.start_daemon(name)
+    if not result["success"]:
+        raise HTTPException(409, detail=result["output"])
+    return result
 
 
-@router.post("/{name}/stop", status_code=501)
-def stop_plugin(name: str):
-    return {"detail": "Plugin lifecycle management not yet implemented"}
+@router.post("/{name}/stop")
+def stop_plugin_daemon(name: str):
+    result = _manager.stop_daemon(name)
+    if not result["success"] and "not running" in result["output"]:
+        raise HTTPException(404, detail=result["output"])
+    return result
+
+
+@router.post("/{name}/action")
+def plugin_action(name: str, body: ActionRequest):
+    if name == "telegram" and body.action == "poll":
+        return _run_poll()
+    raise HTTPException(400, detail=f"Unknown action '{body.action}' for plugin '{name}'")
 
 
 @router.get("/{name}/logs")
 def get_plugin_logs(name: str):
     lines = _manager.get_logs(name)
     return {"plugin": name, "lines": lines}
+
+
+# --- internal ---
+
+def _run_poll():
+    token, allowed, interval = _resolve_telegram_config()
+    if not token:
+        raise HTTPException(400, detail="telegram_token not set")
+
+    from ai_mini_box_telegram.bot import TelegramBot
+    from ai_mini_box_telegram.handlers import process_update
+    from ai_mini_box_telegram.state import FileTelegramStateRepo
+    from ai_mini_box.infrastructure.database import get_db
+
+    bot = TelegramBot(token)
+    state = FileTelegramStateRepo()
+    offset = state.get_offset()
+    try:
+        updates = bot.get_updates(offset=offset)
+    except Exception as e:
+        raise HTTPException(502, detail=f"Telegram API error: {e}")
+
+    count = 0
+    for update in updates:
+        with get_db() as session:
+            if process_update(update, session, allowed_chat_ids=allowed):
+                count += 1
+                state.save_offset(update["update_id"] + 1)
+
+    return {"success": True, "count": count, "output": f"Processed {count} new messages"}
+
+
+def _resolve_telegram_config() -> tuple:
+    config = _manager.get_config()
+    token = config.get("telegram_token", "")
+    allowed = config.get("telegram_allowed_chat_ids", [])
+    interval = config.get("poll_interval", 30)
+    return token, allowed, interval
 
 
 async def _delayed_reload():

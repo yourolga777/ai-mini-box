@@ -85,6 +85,73 @@ from loguru import logger
 logger.add("logs/plugin_my_plugin.log", rotation="1 MB", retention=3)
 ```
 
+## Daemon (background process)
+
+If your plugin needs to run continuously (e.g., polling), add a `daemon` command. The web UI manages daemon lifecycle via start/stop buttons.
+
+```python
+import signal
+import time
+from loguru import logger
+from ai_mini_box.infrastructure.config import JsonConfigManager
+
+logger.add("logs/plugin_my_plugin.log", rotation="1 MB", retention=3)
+
+
+def register(app: typer.Typer):
+    my_plugin = typer.Typer(help="My plugin")
+    app.add_typer(my_plugin, name="my-plugin")
+
+    @my_plugin.command()
+    def daemon():
+        """Run continuous polling loop until interrupted."""
+        config = JsonConfigManager().load()
+        # Validate required config
+        if not config.telegram_token:
+            typer.echo("Error: token not set")
+            raise typer.Exit(1)
+
+        logger.info("Daemon started")
+
+        stop = False
+
+        def _signal_handler(signum, frame):
+            nonlocal stop
+            stop = True
+            logger.info("Shutdown requested, finishing current cycle...")
+
+        signal.signal(signal.SIGINT, _signal_handler)
+        signal.signal(signal.SIGTERM, _signal_handler)
+
+        while not stop:
+            try:
+                # Your polling logic here
+                logger.debug("Polling...")
+            except Exception as e:
+                logger.error(f"Polling error: {e}")
+
+            if stop:
+                break
+            time.sleep(config.poll_interval)
+
+        logger.info("Daemon stopped")
+```
+
+### How the web UI manages daemons
+
+When the user clicks **Start daemon** in the web interface, the server spawns the daemon as a subprocess:
+
+```
+ai-mini-box my-plugin daemon
+```
+
+- stdout/stderr are redirected to `logs/plugin_<name>.log`
+- The PID is saved to `data/daemon_pids.json`
+- On **Stop daemon**, the process is killed (SIGTERM on Unix, `taskkill` on Windows)
+- If the server restarts, it checks which PIDs are still alive and updates their status
+
+Write logs with `logger.info/error` — they appear in the web UI under the plugin's log viewer.
+
 ## Best practices
 
 - Prefix command names to avoid conflicts (e.g., `my-plugin-*`)

@@ -77,6 +77,35 @@ with get_db() as session:
 | `Message` | `id`, `text`, `source`, `topic`, `contact_id`, `chat_id` |
 | `Order` | `id`, `status`, `items`, `total`, `contact_id` |
 
+## State persistence
+
+For plugins that need to keep track of cursors, offsets, or checkpoint state between restarts, store a JSON file in the `data/` directory:
+
+```python
+from pathlib import Path
+import json
+
+
+class FileOffsetRepo:
+    def __init__(self, path: str = "data/my_plugin_state.json"):
+        self._path = Path(path)
+
+    def get_offset(self) -> int | None:
+        if not self._path.exists():
+            return None
+        try:
+            data = json.loads(self._path.read_text(encoding="utf-8"))
+            return data.get("offset")
+        except (json.JSONDecodeError, KeyError, ValueError):
+            return None
+
+    def save_offset(self, offset: int) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.write_text(json.dumps({"offset": offset}), encoding="utf-8")
+```
+
+This pattern is used by the Telegram plugin (`FileTelegramStateRepo`) to persist `update_id` offset between polls.
+
 ## Enums
 
 ```python

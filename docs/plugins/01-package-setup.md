@@ -33,7 +33,8 @@ include = ["ai_mini_box_my_plugin/**"]
 
 ## Key points
 
-- `name` must start with `ai-mini-box-` (the web UI filters by this pattern)
+- `name` must start with `ai-mini-box-` (the web UI validates with regex `^ai[-_]mini[-_]box[-_]` and rejects packages that don't match)
+- Core (`ai-mini-box-core`) and web (`ai-mini-box-web`) are protected and cannot be uninstalled via the web UI
 - `version` follows semver — bump on breaking changes to core or new features
 - `ai-mini-box-core` is the only hard dependency
 - Add extra deps your plugin needs (e.g., `requests`, `python-telegram-bot`)

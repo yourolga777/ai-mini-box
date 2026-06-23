@@ -2,108 +2,168 @@
 
 ## Обзор
 
-Редизайн архитектуры: вместо монолитного приложения — **пакет CLI-инструментов** (`pip install ai-mini-box`), каждый инструмент отвечает за одну функцию.
+Редизайн архитектуры: вместо монолитного приложения — **пакет CLI-инструментов**. Ядро (`ai-mini-box-core`) — каркас с БД, конфигом и CLI. Все сервисы — отдельные pip-пакеты, которые автоматически регистрируются в общем CLI.
 
 ```bash
-ai-mini-box classify    — Классификация текста по 5 темам (Цены/Заказ/Жалоба/График/Другое)
-ai-mini-box draft       — Генерация черновика ответа через LLM
-ai-mini-box lawyer      — RAG-юрист (вопросы по законам)
-ai-mini-box serve       — Фоновый демон обработки сообщений
-ai-mini-box email       — Работа с Email (test/poll/send)
-ai-mini-box telegram    — Работа с Telegram (test/poll/send/webhook)
-ai-mini-box search      — Поиск по истории сообщений, контактам, товарам
-ai-mini-box report      — Отчёты и статистика (topics/timeline/export)
-ai-mini-box contacts    — CRUD контактов + импорт/экспорт
-ai-mini-box products    — CRUD товаров + импорт/экспорт
-ai-mini-box config      — Управление конфигурацией
-ai-mini-box backup      — Резервное копирование БД
-ai-mini-box ingest-laws — Загрузка законов в RAG-индекс
-ai-mini-box gui         — Запуск PyQt6-интерфейса
-ai-mini-box train       — Обучение классификатора
+pip install ai-mini-box-core              # каркас (обязательно)
+pip install ai-mini-box-contacts           # доп. сервисы по выбору
+pip install ai-mini-box-products
+# ...
+ai-mini-box --help  # все установленные сервисы видны автоматически
 ```
 
-## Сложность инструментов
+## Все сервисы
 
-| Инструмент | Сложность | Время | Зависимости | Приоритет |
-|-----------|-----------|-------|-------------|-----------|
-| `classify` | 🟢 Easy | 0.5 дня | sentence-transformers | 1 |
-| `draft` | 🟡 Medium | 1 день | llama-cpp-python + GGUF | 2 |
-| `lawyer` | 🟡 Medium | 1.5 дня | FAISS + LLM | 4 |
-| `serve` | 🔴 Hard | 2 дня | всe зависимости | 3 |
-| `email` | 🟡 Medium | 1 день | imaplib, smtplib | 3 |
-| `telegram` | 🟡 Medium | 1 день | python-telegram-bot | 3 |
-| `search` | 🟢 Easy | 0.5 дня | SQLAlchemy | 1 |
-| `report` | 🟢 Easy | 0.5 дня | pandas, matplotlib | 2 |
-| `contacts` | 🟢 Easy | 0.5 дня | SQLAlchemy | 1 |
-| `products` | 🟢 Easy | 0.5 дня | SQLAlchemy | 1 |
-| `config` | 🟢 Easy | 0.5 дня | JSON, DPAPI | 1 |
-| `backup` | 🟢 Easy | 0.5 дня | sqlite3 | 2 |
-| `ingest-laws` | 🟡 Medium | 0.5 дня | sentence-transformers, FAISS | 4 |
-| `gui` | 🟢 Easy | 0.25 дня | PyQt6 (опционально) | 5 |
-| `train` | 🟡 Medium | 1 день | sentence-transformers, sklearn | 3 |
+### 🟢 База (ядро)
 
-## Структура пакета
+| Инструмент | Описание | Сложность | Важность |
+|---|---|---|---|
+| `init` | Создание config.json, БД и директорий при первом запуске | Easy | Critical |
+| `config` | Управление конфигурацией (show/get/set/check/reset) | Easy | Critical |
+| `search` | Полнотекстовый поиск по сообщениям, контактам, товарам | Easy | High |
+
+### 🟢 CRM + Товары
+
+| Инструмент | Описание | Сложность | Важность |
+|---|---|---|---|
+| `contacts` | CRUD контактов + импорт/экспорт CSV/JSON | Easy | Critical |
+| `products` | CRUD товаров + импорт/экспорт | Easy | Critical |
+| `orders` | Заказы: создание, статусы, история, связь с контактами | Medium | Critical |
+| `loyalty` | Бонусы и скидки постоянным клиентам | Medium | Medium |
+
+### 🟡 Каналы связи
+
+| Инструмент | Описание | Сложность | Важность |
+|---|---|---|---|
+| `telegram` | Telegram-канал (test/poll/send/webhook) | Medium | Critical |
+| `email` | Email-канал (test/poll/send) | Medium | High |
+| `whatsapp` | WhatsApp-канал (test/poll/send) | Hard | Critical |
+| `sms` | SMS-канал (test/send/config) | Medium | Nice-to-have |
+
+### 🔴 Умные функции
+
+| Инструмент | Описание | Сложность | Важность |
+|---|---|---|---|
+| `classify` | Классификация текста по 5 темам | Easy | Critical |
+| `train` | Дообучение классификатора на своих примерах | Medium | High |
+| `draft` | Генерация черновика ответа через LLM | Medium | High |
+| `lawyer` | RAG-юрист (вопросы по законам) | Medium | Medium |
+| `ingest-laws` | Загрузка законов в RAG-индекс | Medium | Medium |
+
+### 🔴 Демон + Уведомления
+
+| Инструмент | Описание | Сложность | Важность |
+|---|---|---|---|
+| `serve` | Фоновый демон обработки сообщений | Hard | Critical |
+| `notify` | Уведомления владельца о событиях | Easy | High |
+
+### 🟢 Отчёты + Утилиты
+
+| Инструмент | Описание | Сложность | Важность |
+|---|---|---|---|
+| `report` | Отчёты и статистика (topics/timeline/export) | Easy | High |
+| `backup` | Резервное копирование БД | Easy | High |
+| `analytics` | LTV, retention, конверсия, прогнозы | Medium | Medium |
+
+### 🟣 Веб + GUI
+
+| Инструмент | Описание | Сложность | Важность |
+|---|---|---|---|
+| `web` | Веб-интерфейс (FastAPI, браузер) | Hard | Critical |
+| `gui` | Десктопный PyQt6 интерфейс | Easy | Nice-to-have |
+
+### 🟠 Доп. бизнес-инструменты
+
+| Инструмент | Описание | Сложность | Важность |
+|---|---|---|---|
+| `invoices` | Создание счетов/чеков в PDF, отправка клиенту | Medium | High |
+| `calendar` | Запись на услуги, расписание | Medium | Medium |
+| `survey` | Опросы и NPS | Easy | Medium |
+| `tasks` | Внутренние задачи и напоминания | Medium | Medium |
+
+### 🟤 Интеграции
+
+| Инструмент | Описание | Сложность | Важность |
+|---|---|---|---|
+| `import-wb` | Импорт заказов/товаров с Wildberries, Ozon, Я.Маркет | Hard | High |
+| `payment` | Приём платежей (ЮКасса, Tinkoff, Сбер) | Hard | High |
+| `crm-sync` | Синхронизация с AmoCRM, Bitrix24 | Medium | Medium |
+
+## Структура пакетов
 
 ```
-ai_mini_box/
-├── __init__.py
-├── __main__.py                  # python -m ai_mini_box
-├── cli.py                       # Typer app + общий callback
-├── tools/
-│   ├── __init__.py
-│   ├── classify.py
-│   ├── draft.py
-│   ├── lawyer.py
-│   ├── serve.py
-│   ├── email.py
-│   ├── telegram.py
-│   ├── search.py
-│   ├── report.py
-│   ├── contacts.py
-│   ├── products.py
-│   ├── config.py
-│   ├── backup.py
-│   ├── ingest_laws.py
-│   ├── gui.py
-│   └── train.py
-├── core/                        # переносится
-├── infrastructure/              # переносится
-└── service_layer/               # переносится
+ai-mini-box-core/                     # публикуется в PyPI
+├── pyproject.toml                    # зависимости: typer, SQLAlchemy, loguru
+└── ai_mini_box/
+    ├── __init__.py
+    ├── __main__.py                   # python -m ai_mini_box
+    ├── cli.py                        # Typer app + авто-поиск tools/
+    ├── core/
+    │   ├── models.py                 # Contact, Product, Message, Order, Topic, ...
+    │   ├── repositories.py           # ABC: ContactRepo, ProductRepo, MessageRepo, ...
+    │   └── exceptions.py             # AppError, NotFoundError, ConfigError
+    ├── infrastructure/
+    │   ├── database.py               # engine, session, init_db()
+    │   ├── config.py                 # JsonConfigManager
+    │   ├── logger.py                 # loguru setup
+    │   └── repositories/             # SQLAlchemy реализации
+    ├── tools/
+    │   └── __init__.py               # пустой (namespace package)
+    └── tests/
+        ├── conftest.py               # фикстуры: CliRunner, tmp_config, mock_repos
+        ├── mocks.py                  # MockContactRepo, MockProductRepo, ...
+        └── test_registry.py          # smoke: проверка регистрации команд
+
+ai-mini-box-contacts/                 # отдельный пакет
+├── pyproject.toml                    # depends: ai-mini-box-core
+└── ai_mini_box/tools/
+    └── contacts.py                   # регистрируется в CLI автоматически
+
+ai-mini-box-products/                 # отдельный пакет
+├── pyproject.toml
+└── ai_mini_box/tools/
+    └── products.py
 ```
 
-## Зависимости (pyproject.toml)
+## Зависимости (pyproject.toml core)
 
 ```toml
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
 [project]
-name = "ai-mini-box"
+name = "ai-mini-box-core"
 version = "4.0.0"
+description = "AI mini box — ядро системы автоматизации малого бизнеса"
+requires-python = ">=3.12"
 dependencies = [
     "typer>=0.12",
-    "llama-cpp-python==0.3.28",
-    "SQLAlchemy==2.0.36",
-    "sentence-transformers==2.2.2",
-    "faiss-cpu==1.14.2",
-    "python-telegram-bot==22.7",
-    "pandas>=3.0",
-    "matplotlib>=3.10",
+    "SQLAlchemy>=2.0",
     "loguru>=0.7",
-    "scikit-learn>=1.6",
+    "pydantic>=2.0",
 ]
 [project.optional-dependencies]
-gui = ["PyQt6>=6.5"]
+dev = ["pytest>=8", "pytest-cov>=5"]
 [project.scripts]
 ai-mini-box = "ai_mini_box.cli:app"
 ```
 
 ## Рекомендуемый порядок реализации
 
-| Шаг | Инструменты | Результат |
-|-----|-------------|-----------|
-| 1 | cli skeleton + `config`, `contacts`, `products` | База: CRUD + конфиг работают |
-| 2 | `search`, `classify` | Поиск и классификация |
-| 3 | `serve`, `email`, `telegram` | Демон и каналы |
-| 4 | `draft`, `report`, `backup` | Умные функции |
-| 5 | `train`, `lawyer`, `ingest-laws` | RAG и обучение |
-| 6 | `gui` | Графический интерфейс |
-```
+| Этап | Сервисы | Результат |
+|------|---------|-----------|
+| **MVP** | core + init + config + contacts + products + search + telegram + whatsapp + classify + serve + notify + web | Рабочий продукт для продажи |
+| **2** | orders + draft + email + report + backup + invoices | Полный цикл продаж |
+| **3** | lawyer + ingest-laws + train + analytics + calendar + survey + tasks | Умные функции |
+| **4** | loyalty + import-wb + payment + crm-sync + sms + gui | Интеграции и ниши |
 
+## Тестирование
+
+Каждый сервис тестируется на 3 уровнях (подробнее в `Тесты.md`):
+
+1. **Unit** — mock-репозитории, изолированная логика
+2. **Integration** — CliRunner + тестовая БД
+3. **Smoke** — `ai-mini-box --help` показывает все команды
+
+CI перед мержем прогоняет тесты ВСЕХ сервисов (`pytest tests/`).

@@ -30,12 +30,15 @@ jobs:
       - name: Install web package
         run: pip install -e packages/web/
 
+      - name: Install telegram package
+        run: pip install -e packages/telegram/
+
       - name: Install test tools
-        run: pip install pytest pytest-cov httpx
+        run: pip install pytest pytest-cov httpx pytest-mock
 
       - name: Run tests
         run: |
           pytest packages/core/tests/ -v --cov
           pytest packages/demo/tests/ -v --cov
           pytest packages/web/tests/ -v --cov
-
+          pytest packages/telegram/tests/ -v --cov

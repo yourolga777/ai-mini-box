@@ -5,6 +5,7 @@ on:
     tags:
       - "v*"
       - "web-*"
+      - "telegram-*"
 
 jobs:
   publish:
@@ -18,6 +19,9 @@ jobs:
           - path: packages/web
             name: ai-mini-box-web
             tag_prefix: "web-v"
+          - path: packages/telegram
+            name: ai-mini-box-telegram
+            tag_prefix: "telegram-"
 
     steps:
       - uses: actions/checkout@v4
