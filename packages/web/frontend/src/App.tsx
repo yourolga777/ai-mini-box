@@ -8,7 +8,6 @@ import Orders from "./pages/Orders";
 import Plugins from "./pages/Plugins";
 import PluginDetail from "./pages/PluginDetail";
 import Help from "./pages/Help";
-import Architecture from "./pages/Architecture";
 
 export default function App() {
   return (
@@ -23,7 +22,6 @@ export default function App() {
           <Route path="plugins" element={<Plugins />} />
           <Route path="plugins/:name" element={<PluginDetail />} />
           <Route path="help" element={<Help />} />
-          <Route path="architecture" element={<Architecture />} />
         </Route>
       </Routes>
     </BrowserRouter>

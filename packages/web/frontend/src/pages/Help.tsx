@@ -1,69 +1,142 @@
+import { useQuery } from "@tanstack/react-query";
+
+function mdToHtml(text: string): string {
+  const lines = text.split("\n");
+  let html = "";
+  let inCode = false;
+  let inTable = false;
+
+  for (const raw of lines) {
+    const line = raw.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    if (line.startsWith("```")) {
+      if (inCode) { html += "</pre>\n"; inCode = false; }
+      else { html += '<pre class="bg-gray-900 text-green-300 text-xs p-3 rounded overflow-x-auto my-2">\n'; inCode = true; }
+      continue;
+    }
+    if (inCode) { html += line + "\n"; continue; }
+
+    if (line.startsWith("# ")) {
+      html += `<h2 class="text-lg font-bold mt-4 mb-2">${linkify(escapeBold(line.slice(2)))}</h2>\n`;
+      continue;
+    }
+    if (line.startsWith("## ")) {
+      html += `<h3 class="text-base font-semibold mt-3 mb-1">${linkify(escapeBold(line.slice(3)))}</h3>\n`;
+      continue;
+    }
+
+    if (line.startsWith("|") && line.endsWith("|")) {
+      if (!inTable) {
+        inTable = true;
+        html += '<table class="w-full text-left text-sm my-2 border-collapse"><thead><tr class="border-b">';
+        for (const cell of line.split("|").filter(Boolean)) {
+          html += `<th class="py-1 pr-4 font-medium">${cell.trim()}</th>`;
+        }
+        html += "</tr></thead><tbody>\n";
+      } else if (line.includes("---")) {
+        continue;
+      } else {
+        html += "<tr class=\"border-b\">";
+        for (const cell of line.split("|").filter(Boolean)) {
+          html += `<td class="py-1 pr-4 text-gray-600">${cell.trim()}</td>`;
+        }
+        html += "</tr>\n";
+      }
+      continue;
+    }
+    if (inTable && !line.startsWith("|")) {
+      html += "</tbody></table>\n";
+      inTable = false;
+    }
+
+    if (line.startsWith("- ")) {
+      html += `<li class="text-gray-600 ml-4 list-disc">${inline(line.slice(2))}</li>\n`;
+      continue;
+    }
+
+    if (line.trim() === "") {
+      if (inTable) { html += "</tbody></table>\n"; inTable = false; }
+      continue;
+    }
+
+    const rendered = inline(line);
+    if (rendered) {
+      html += `<p class="text-gray-700 text-sm my-1">${rendered}</p>\n`;
+    }
+  }
+
+  if (inCode) html += "</pre>\n";
+  if (inTable) html += "</tbody></table>\n";
+  return html;
+}
+
+function escapeBold(t: string): string {
+  return t.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
+
+function linkify(t: string): string {
+  return t.replace(
+    /https?:\/\/[^\s<]+/g,
+    (url) => `<a href="${url}" class="text-blue-600 underline" target="_blank" rel="noreferrer">${url}</a>`
+  );
+}
+
+function inline(t: string): string {
+  let s = t
+    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded text-xs">$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/https?:\/\/[^\s<]+/g,
+    (url) => `<a href="${url}" class="text-blue-600 underline" target="_blank" rel="noreferrer">${url}</a>`
+  );
+  return s;
+}
+
+interface Section {
+  id: string;
+  title: string;
+  content: string;
+  source: string;
+  order: number;
+}
+
 export default function Help() {
+  const { data, isLoading } = useQuery<Section[]>({
+    queryKey: ["help"],
+    queryFn: () => fetch("/api/help").then((r) => r.json()),
+  });
+
+  if (isLoading) return <p className="text-gray-500">Loading help...</p>;
+
   return (
-    <div className="max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold">Help</h1>
+    <div className="max-w-3xl">
+      <h1 className="text-2xl font-bold mb-6">Help</h1>
 
-      <section className="bg-white p-4 rounded shadow-sm space-y-2">
-        <h2 className="text-lg font-semibold">Installation</h2>
-        <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-pip install ai-mini-box-core ai-mini-box-web{`\n`}pip install ai-mini-box-demo
-        </pre>
-        <p className="text-gray-600 text-sm">
-          Or clone the repo and install in editable mode:
-        </p>
-        <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-git clone https://github.com/yourolga777/ai-mini-box.git{`\n`}cd ai-mini-box{`\n`}pip install -e packages/core/{`\n`}pip install -e packages/web/
-        </pre>
-      </section>
+      <div className="flex gap-8">
+        <nav className="w-48 shrink-0 space-y-1 sticky top-4 self-start">
+          <p className="text-xs text-gray-400 uppercase mb-2">Sections</p>
+          {(data ?? []).map((s) => (
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              className="block text-sm text-gray-600 hover:text-blue-600 transition"
+            >
+              {s.title}
+            </a>
+          ))}
+        </nav>
 
-      <section className="bg-white p-4 rounded shadow-sm space-y-2">
-        <h2 className="text-lg font-semibold">Quick start</h2>
-        <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-ai-mini-box init{`\n`}ai-mini-box serve
-        </pre>
-        <p className="text-gray-600 text-sm">
-          Open <a href="http://127.0.0.1:8080" className="text-blue-600 underline">http://127.0.0.1:8080</a> in your browser.
-        </p>
-      </section>
-
-      <section className="bg-white p-4 rounded shadow-sm space-y-2">
-        <h2 className="text-lg font-semibold">One-click run</h2>
-        <p className="text-gray-600 text-sm">
-          Double-click <code className="bg-gray-100 px-1 rounded">run.bat</code> in the project root — it installs
-          dependencies, initializes the project, and starts the server.
-        </p>
-        <p className="text-gray-600 text-sm">
-          Double-click <code className="bg-gray-100 px-1 rounded">stop.bat</code> to stop the server.
-        </p>
-      </section>
-
-      <section className="bg-white p-4 rounded shadow-sm space-y-2">
-        <h2 className="text-lg font-semibold">CLI commands</h2>
-        <div className="text-sm space-y-1 text-gray-700">
-          <p><code className="bg-gray-100 px-1 rounded">ai-mini-box init</code> — create config and database</p>
-          <p><code className="bg-gray-100 px-1 rounded">ai-mini-box check-db</code> — verify database connection</p>
-          <p><code className="bg-gray-100 px-1 rounded">ai-mini-box db upgrade</code> — run pending migrations</p>
-          <p><code className="bg-gray-100 px-1 rounded">ai-mini-box config show</code> — display configuration</p>
-          <p><code className="bg-gray-100 px-1 rounded">ai-mini-box config set key value</code> — set a config value</p>
-          <p><code className="bg-gray-100 px-1 rounded">ai-mini-box serve</code> — start web interface</p>
+        <div className="flex-1 space-y-6">
+          {(data ?? []).map((s) => (
+            <section key={s.id} id={s.id} className="bg-white p-4 rounded shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-lg font-bold">{s.title}</h2>
+                <span className="text-xs text-gray-400">{s.source}</span>
+              </div>
+              <div dangerouslySetInnerHTML={{ __html: mdToHtml(s.content) }} />
+            </section>
+          ))}
         </div>
-      </section>
-
-      <section className="bg-white p-4 rounded shadow-sm space-y-2">
-        <h2 className="text-lg font-semibold">API documentation</h2>
-        <p className="text-gray-600 text-sm">
-          Interactive Swagger UI is available at <a href="/docs" className="text-blue-600 underline">/docs</a> when the server is running.
-        </p>
-      </section>
-
-      <section className="bg-white p-4 rounded shadow-sm space-y-2">
-        <h2 className="text-lg font-semibold">Links</h2>
-        <div className="text-sm space-y-1">
-          <p><a href="https://github.com/yourolga777/ai-mini-box" className="text-blue-600 underline" target="_blank" rel="noreferrer">GitHub</a></p>
-          <p><a href="https://pypi.org/project/ai-mini-box-core/" className="text-blue-600 underline" target="_blank" rel="noreferrer">PyPI — ai-mini-box-core</a></p>
-          <p><a href="https://pypi.org/project/ai-mini-box-web/" className="text-blue-600 underline" target="_blank" rel="noreferrer">PyPI — ai-mini-box-web</a></p>
-        </div>
-      </section>
+      </div>
     </div>
   );
 }

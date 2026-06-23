@@ -2,14 +2,14 @@ import pytest
 
 
 def test_list_plugins(client):
-    resp = client.get("/api/plugins")
+    resp = client.get("/api/plugins/")
     assert resp.status_code == 200
     plugins = resp.json()
     assert isinstance(plugins, list)
 
 
 def test_get_plugin_existing(client):
-    resp = client.get("/api/plugins")
+    resp = client.get("/api/plugins/")
     plugins = resp.json()
     if plugins:
         name = plugins[0]["name"]
@@ -21,16 +21,6 @@ def test_get_plugin_existing(client):
 def test_get_plugin_not_found(client):
     resp = client.get("/api/plugins/nonexistent")
     assert resp.status_code == 404
-
-
-def test_start_plugin_returns_501(client):
-    resp = client.post("/api/plugins/demo/start")
-    assert resp.status_code == 501
-
-
-def test_stop_plugin_returns_501(client):
-    resp = client.post("/api/plugins/demo/stop")
-    assert resp.status_code == 501
 
 
 def test_get_plugin_logs_empty(client):
@@ -145,3 +135,91 @@ class TestUninstall:
         resp = client.delete("/api/plugins/telegram")
         assert resp.status_code == 200
         assert resp.json()["success"] is True
+
+
+class TestDaemonLifecycle:
+    def test_start_not_found(self, client):
+        resp = client.post("/api/plugins/nonexistent/start")
+        assert resp.status_code == 404
+
+    def test_stop_not_found(self, client):
+        resp = client.post("/api/plugins/nonexistent/stop")
+        assert resp.status_code == 404
+
+    def test_start_success(self, client, monkeypatch):
+        monkeypatch.setattr(
+            "ai_mini_box_web.services.plugin_manager.PluginManager.get_plugin",
+            lambda self, name: {"name": name, "module": "test", "status": "installed", "pid": None},
+        )
+        monkeypatch.setattr(
+            "ai_mini_box_web.services.plugin_manager.PluginManager.start_daemon",
+            lambda self, name: {"success": True, "output": "Daemon started", "pid": 12345},
+        )
+        resp = client.post("/api/plugins/demo/start")
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+
+    def test_start_already_running(self, client, monkeypatch):
+        monkeypatch.setattr(
+            "ai_mini_box_web.services.plugin_manager.PluginManager.get_plugin",
+            lambda self, name: {"name": name, "module": "test", "status": "running", "pid": 12345},
+        )
+        monkeypatch.setattr(
+            "ai_mini_box_web.services.plugin_manager.PluginManager.start_daemon",
+            lambda self, name: {"success": False, "output": "Daemon already running (PID 12345)"},
+        )
+        resp = client.post("/api/plugins/demo/start")
+        assert resp.status_code == 409
+
+    def test_stop_success(self, client, monkeypatch):
+        monkeypatch.setattr(
+            "ai_mini_box_web.services.plugin_manager.PluginManager.stop_daemon",
+            lambda self, name: {"success": True, "output": "Daemon stopped"},
+        )
+        resp = client.post("/api/plugins/demo/stop")
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+
+
+class TestConfig:
+    def test_get_config(self, client):
+        resp = client.get("/api/plugins/config")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "telegram_token" in data
+
+    def test_set_config(self, client, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "ai_mini_box_web.services.plugin_manager.PluginManager.set_config",
+            lambda self, key, value: {"success": True},
+        )
+        resp = client.post("/api/plugins/config/set", json={"key": "telegram_token", "value": "test:123"})
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+
+    def test_set_config_error(self, client, monkeypatch):
+        monkeypatch.setattr(
+            "ai_mini_box_web.services.plugin_manager.PluginManager.set_config",
+            lambda self, key, value: {"success": False, "error": "Invalid key"},
+        )
+        resp = client.post("/api/plugins/config/set", json={"key": "invalid_key", "value": "test"})
+        assert resp.status_code == 400
+
+
+class TestAction:
+    def test_poll_action(self, client, monkeypatch):
+        monkeypatch.setattr(
+            "ai_mini_box_web.routers.plugins._resolve_telegram_config",
+            lambda: ("test:token", [], 30),
+        )
+        monkeypatch.setattr(
+            "ai_mini_box_web.routers.plugins._run_poll",
+            lambda: {"success": True, "count": 3, "output": "Processed 3 new messages"},
+        )
+        resp = client.post("/api/plugins/telegram/action", json={"action": "poll"})
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 3
+
+    def test_unknown_action(self, client):
+        resp = client.post("/api/plugins/telegram/action", json={"action": "unknown"})
+        assert resp.status_code == 400
