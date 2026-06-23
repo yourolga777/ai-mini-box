@@ -7,7 +7,7 @@ from ai_mini_box_web.dependencies import get_repos
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("")
 def list_messages(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -33,7 +33,7 @@ def get_message(item_id: int, repos: RepoContainer = Depends(get_repos)):
     return item.model_dump()
 
 
-@router.post("/", status_code=201)
+@router.post("", status_code=201)
 def create_message(data: dict, repos: RepoContainer = Depends(get_repos)):
     message = Message(**data)
     created = repos.messages.add(message)
