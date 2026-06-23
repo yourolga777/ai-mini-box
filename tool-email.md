@@ -75,6 +75,21 @@ ai-mini-box email send --to "client@mail.ru" --subject "Re: Вопрос" --body
 6. Флаг `--json` для структурированного вывода
 7. Для `send`: обязательная проверка `--to` валидности email
 
+### Архитектура:
+- Файл: `ai_mini_box/tools/email.py`
+- Регистрация: `def register(app: typer.Typer)` — `app.add_typer(email_app, name="email")`
+- Использует `MessageRepo` из `ai_mini_box.core.repositories`
+- Использует `JsonConfigManager` из `ai_mini_box.infrastructure.config`
+- EmailChannel — в infrastructure/channels/email_channel.py
+- Пароль расшифровывается через JsonConfigManager
+
+### Тесты:
+1. Unit: MockMessageRepo — poll сохраняет сообщения
+2. Unit: send возвращает True
+3. Unit: валидация email-адреса
+4. Integration: CliRunner + mock канала — test → poll → send
+5. Smoke: --help
+
 ### Структура файла:
 ```
 tools/email.py

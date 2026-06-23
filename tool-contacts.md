@@ -82,6 +82,20 @@ ai-mini-box contacts export --output contacts.csv --format csv
 7. `--json` для машинного вывода
 8. Валидация: при add/update проверять обязательные поля
 
+### Архитектура:
+- Файл: `ai_mini_box/tools/contacts.py`
+- Регистрация: `def register(app: typer.Typer)` — `app.add_typer(contacts_app, name="contacts")`
+- Использует `ContactRepo` из `ai_mini_box.core.repositories` (абстракция)
+- Реализация `SqliteContactRepo` — из `ai_mini_box.infrastructure.repositories`
+- Contact — dataclass из `ai_mini_box.core.models`
+
+### Тесты:
+1. Unit: MockContactRepo — add, list, update, delete, search
+2. Unit: импорт CSV и JSON
+3. Unit: валидация обязательных полей
+4. Integration: CliRunner + tmp БД — полный CRUD-цикл
+5. Smoke: --help показывает все подкоманды
+
 ### Структура файла:
 ```
 tools/contacts.py

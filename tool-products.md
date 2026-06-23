@@ -77,6 +77,20 @@ ai-mini-box products import --file products.csv --format csv
 6. `--json` для машинного вывода
 7. При list отображать цену как "1 999₽"
 
+### Архитектура:
+- Файл: `ai_mini_box/tools/products.py`
+- Регистрация: `def register(app: typer.Typer)` — `app.add_typer(products_app, name="products")`
+- Использует `ProductRepo` из `ai_mini_box.core.repositories` (абстракция)
+- Реализация `SqliteProductRepo` — из `ai_mini_box.infrastructure.repositories`
+- Product — dataclass из `ai_mini_box.core.models`
+
+### Тесты:
+1. Unit: MockProductRepo — add, list, update, delete, search
+2. Unit: цена в копейках, отображение в рублях
+3. Unit: импорт CSV и JSON
+4. Integration: CliRunner — полный CRUD-цикл
+5. Smoke: --help показывает все подкоманды
+
 ### Структура файла:
 ```
 tools/products.py

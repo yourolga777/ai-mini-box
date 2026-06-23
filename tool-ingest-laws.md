@@ -84,6 +84,21 @@ ai-mini-box ingest-laws clear
 9. `status`: показать количество чанков и источники
 10. `--rebuild`: очистить и перестроить с нуля
 
+### Архитектура:
+- Файл: `ai_mini_box/tools/ingest_laws.py`
+- Регистрация: `def register(app: typer.Typer)` — `app.add_typer(ingest_app, name="ingest-laws")`
+- Использует sentence-transformers для эмбеддингов
+- Использует FAISS для векторного индекса
+- Сохраняет метаданные в БД (через LawRepo)
+- Зависимости: sentence-transformers, faiss-cpu
+
+### Тесты:
+1. Unit: chunking текста на заданный размер
+2. Unit: парсинг CSV с колонками title/text/source
+3. Unit: clear очищает индекс
+4. Integration: CliRunner — file → status → clear
+5. Smoke: --help
+
 ### Структура файла:
 ```
 tools/ingest_laws.py

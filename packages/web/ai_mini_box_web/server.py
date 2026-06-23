@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
         logger.info("Graceful shutdown complete, proceeding with reload")
 
 
-app = FastAPI(title="AI mini box", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="AI mini box", version="0.1.1", lifespan=lifespan)
 
 app.include_router(contacts.router, prefix="/api/contacts", tags=["contacts"])
 app.include_router(products.router, prefix="/api/products", tags=["products"])

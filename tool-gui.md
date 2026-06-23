@@ -58,6 +58,19 @@ ai-mini-box gui --style dark.qss
 7. Single instance: по умолчанию включён (CreateMutexW)
 8. Если PyQt6 не установлен — ошибка: "GUI dependencies not installed. Run: pip install ai-mini-box[gui]"
 
+### Архитектура:
+- Файл: `ai_mini_box/tools/gui.py`
+- Регистрация: `def register(app: typer.Typer)` — одиночная команда
+- Опциональная зависимость (PyQt6)
+- Использует репозитории из `ai_mini_box.core.repositories` для данных
+- Использует `JsonConfigManager` для настроек
+- Single instance: мьютекс через infrastructure
+
+### Тесты:
+1. Unit: импорт проверяет наличие PyQt6
+2. Unit: ошибка при отсутствии PyQt6 содержит правильную инструкцию
+3. Smoke: --help показывает опции
+
 ### Структура файла:
 ```
 tools/gui.py

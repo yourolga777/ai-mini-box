@@ -80,6 +80,20 @@ ai-mini-box backup restore --file data/backup/app_2026-06-20_153000.db --force
 7. Показывать размер бэкапов в читаемом формате (MB/GB)
 8. При `restore` проверять, что файл существует и валидный SQLite
 
+### Архитектура:
+- Файл: `ai_mini_box/tools/backup.py`
+- Регистрация: `def register(app: typer.Typer)` — `app.add_typer(backup_app, name="backup")`
+- Использует `JsonConfigManager` для настроек авто-бэкапа
+- Работает напрямую с sqlite3 (не через SQLAlchemy для консистентности)
+- Не зависит от репозиториев
+
+### Тесты:
+1. Unit: create_backup в tmp_path
+2. Unit: list показывает размер файлов
+3. Unit: restore проверяет валидность SQLite
+4. Integration: CliRunner — create → list → restore
+5. Smoke: --help
+
 ### Структура файла:
 ```
 tools/backup.py

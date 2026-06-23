@@ -77,6 +77,20 @@ ai-mini-box telegram send --chat-id 123456 --text "Здравствуйте!"
 6. Флаг `--json` для poll и info
 7. Для `send` проверять, что чат существует (sendMessage с verify)
 
+### Архитектура:
+- Файл: `ai_mini_box/tools/telegram.py`
+- Регистрация: `def register(app: typer.Typer)` — `app.add_typer(telegram_app, name="telegram")`
+- Использует `MessageRepo` из `ai_mini_box.core.repositories`
+- Использует `JsonConfigManager` для токена
+- TelegramChannel — в infrastructure/channels/telegram_channel.py
+- Сохраняет offset через MessageRepo (external_id)
+
+### Тесты:
+1. Unit: MockMessageRepo — poll сохраняет offset
+2. Unit: send проверяет chat_id
+3. Integration: CliRunner + mock канала — test → poll → send
+4. Smoke: --help
+
 ### Структура файла:
 ```
 tools/telegram.py

@@ -67,6 +67,21 @@ ai-mini-box draft --json "Можно прийти в субботу?"
 7. Контекст товаров и графика подтягивается из БД (ProductRepo, AppConfig)
 8. Если модель не загружена — понятная ошибка
 
+### Архитектура:
+- Файл: `ai_mini_box/tools/draft.py`
+- Регистрация: `def register(app: typer.Typer)` — одиночная команда
+- Использует `ProductRepo` из `ai_mini_box.core.repositories` для контекста товаров
+- Использует `AppConfig` из `ai_mini_box.infrastructure.config` для графика работы
+- LLM — внешняя зависимость (llama-cpp-python)
+- Lazy-load: модель при первом вызове
+
+### Тесты:
+1. Unit: mock-LLM + MockProductRepo — генерация с контекстом товаров
+2. Unit: --no-products отключает подстановку товаров
+3. Unit: --json вывод
+4. Integration: CliRunner — draft текста
+5. Smoke: --help
+
 ### Структура файла:
 ```
 tools/draft.py

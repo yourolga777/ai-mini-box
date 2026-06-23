@@ -68,6 +68,23 @@ ai-mini-box serve --daemon --pidfile /tmp/ai-box.pid
 9. Флаг `--pidfile`: сохранять PID для --daemon режима
 10. Health-check: если канал отвалился — реконнект с exponential backoff
 
+### Архитектура:
+- Файл: `ai_mini_box/tools/serve.py`
+- Регистрация: `def register(app: typer.Typer)` — одиночная команда
+- Использует все репозитории: ContactRepo, ProductRepo, MessageRepo, OrderRepo
+- Использует JsonConfigManager, get_db, setup_logging
+- Каналы: TelegramChannel, EmailChannel (опционально WhatsAppChannel)
+- Классификатор + LLM — внешние зависимости (lazy-load)
+- Graceful shutdown: Ctrl+C → сохранение состояния
+- Single instance: через мьютекс (Windows) / PID-файл (Linux)
+
+### Тесты:
+1. Unit: MockInboxService — poll_all → shutdown
+2. Unit: обработка ошибок канала (reconnect)
+3. Integration: CliRunner — --dry-run проверяет конфиг
+4. Integration: CliRunner — --once однократный poll
+5. Smoke: --help
+
 ### Структура файла:
 ```
 tools/serve.py

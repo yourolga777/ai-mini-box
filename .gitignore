@@ -13,3 +13,5 @@ migrations/versions/
 !migrations/versions/.gitkeep
 data/
 .DS_Store
+logs/
+deepseek_*.md

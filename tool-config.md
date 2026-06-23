@@ -88,6 +88,19 @@ ai-mini-box config check
 8. Сохранение через JsonConfigManager с шифрованием пароля
 9. Валидация типов при set (int для poll_interval, bool для флагов)
 
+### Архитектура:
+- Файл: `ai_mini_box/tools/config.py`
+- Регистрация: `def register(app: typer.Typer)` — `app.add_typer(config_app, name="config")`
+- Использует `AppConfig` и `JsonConfigManager` из `ai_mini_box.infrastructure.config`
+- Все импорты только из `ai_mini_box.core` и `ai_mini_box.infrastructure`
+
+### Тесты:
+1. Unit: JsonConfigManager — load/save/check в tmp_path
+2. Unit: маскировка паролей при show
+3. Unit: dot-нотация config set
+4. Integration: CliRunner — config show/set/check/reset
+5. Smoke: --help показывает все подкоманды
+
 ### Структура файла:
 ```
 tools/config.py

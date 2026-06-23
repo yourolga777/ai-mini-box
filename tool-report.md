@@ -82,6 +82,20 @@ ai-mini-box report export --format csv --output messages.csv
 7. Для `timeline`: cli-вывод в виде ASCII-гистограммы
 8. Для `export`: поддержка CSV и JSON
 
+### Архитектура:
+- Файл: `ai_mini_box/tools/report.py`
+- Регистрация: `def register(app: typer.Typer)` — `app.add_typer(report_app, name="report")`
+- Использует `MessageRepo` и `OrderRepo` из `ai_mini_box.core.repositories`
+- pandas + matplotlib для графиков
+- Зависимости: pandas, matplotlib
+
+### Тесты:
+1. Unit: MockMessageRepo — topics distribution
+2. Unit: MockMessageRepo — timeline
+3. Unit: export в CSV/JSON
+4. Integration: CliRunner — topics + timeline + export
+5. Smoke: --help
+
 ### Структура файла:
 ```
 tools/report.py

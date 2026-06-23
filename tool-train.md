@@ -73,6 +73,20 @@ ai-mini-box train --force
 7. Вывод статистики: сколько примеров на каждый класс
 8. Валидация: проверка, что в данных есть все 5 тем
 
+### Архитектура:
+- Файл: `ai_mini_box/tools/train.py`
+- Регистрация: `def register(app: typer.Typer)` — одиночная команда
+- Использует `Topic` enum из `ai_mini_box.core.models`
+- Сохраняет модель в `data/models/classifier.pkl`
+- Зависимости: sentence-transformers, sklearn, joblib
+
+### Тесты:
+1. Unit: проверка валидации входных данных (5 тем обязательны)
+2. Unit: --force перезаписывает существующую модель
+3. Unit: --eval выводит метрики
+4. Integration: CliRunner — train с тестовым JSON
+5. Smoke: --help
+
 ### Структура файла:
 ```
 tools/train.py

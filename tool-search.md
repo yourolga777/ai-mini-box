@@ -82,6 +82,20 @@ ai-mini-box search products --json "футболка"
 7. Для `messages`: цветной вывод по темам (Цены=🟢, Жалоба=🔴, Заказ=🔵, График=🟡, Другое=⚪)
 8. Валидация параметров: --topic принимает только 5 значений
 
+### Архитектура:
+- Файл: `ai_mini_box/tools/search.py`
+- Регистрация: `def register(app: typer.Typer)` — `app.add_typer(search_app, name="search")`
+- Использует `ContactRepo`, `ProductRepo`, `MessageRepo` из `ai_mini_box.core.repositories`
+- Все репозитории — read-only (list, search)
+- Вывод: цветной (цвета по темам), с эмодзи
+
+### Тесты:
+1. Unit: MockContactRepo + MockProductRepo + MockMessageRepo — поиск по всем типам
+2. Unit: фильтрация по теме сообщений
+3. Unit: пагинация (limit + offset)
+4. Integration: CliRunner — поиск в tmp БД
+5. Smoke: --help показывает подкоманды messages/contacts/products
+
 ### Структура файла:
 ```
 tools/search.py

@@ -59,6 +59,20 @@ ai-mini-box classify --confidence "Можно прийти в пятницу?"
 6. Обработка ошибок: если модель не найдена — понятное сообщение и ненулевой exit code
 7. Директория с данными по умолчанию: `data/` в корне проекта
 
+### Архитектура:
+- Файл: `ai_mini_box/tools/classify.py`
+- Регистрация: `def register(app: typer.Typer)` — `app.add_typer(classify_app, name="classify")`
+- Использует `Topic` enum из `ai_mini_box.core.models`
+- Классификатор — внешняя зависимость (sentence-transformers)
+- Lazy-load: модель загружается при первом вызове
+
+### Тесты:
+1. Unit: mock-классификатор — возвращает предопределённую тему
+2. Unit: --json вывод валидный JSON
+3. Unit: ошибка при отсутствии модели
+4. Integration: CliRunner — classify текста
+5. Smoke: --help
+
 ### Структура файла:
 ```
 tools/classify.py
