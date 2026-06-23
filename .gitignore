@@ -15,3 +15,4 @@ data/
 .DS_Store
 logs/
 deepseek_*.md
+backup-*
