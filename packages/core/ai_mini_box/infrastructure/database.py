@@ -28,10 +28,6 @@ def init_db(db_path: Optional[str | Path] = None):
     db_path.parent.mkdir(parents=True, exist_ok=True)
     _engine = create_engine(f"sqlite:///{db_path}", echo=False, connect_args={"check_same_thread": False})
     _SessionLocal = sessionmaker(bind=_engine)
-    try:
-        Base.metadata.create_all(_engine)
-    except Exception:
-        pass  # tables may already exist from migrations
 
 
 def get_engine():

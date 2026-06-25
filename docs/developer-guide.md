@@ -120,9 +120,11 @@ RepoContainer предоставляет доступ ко всем репози
 Атрибут	Тип	Методы
 repos.contacts	ContactRepo	list, get_by_id, add, update, delete, search
 repos.products	ProductRepo	list, get_by_id, add, update, delete, search
-repos.messages	MessageRepo	list, get_by_id, add, search
+repos.messages	MessageRepo	list, get_by_id, add, update, search
 repos.orders	OrderRepo	list, get_by_id, add, update
-Все методы репозиториев работают с Pydantic-моделями (Contact, Product, Message, Order), определёнными в core.models.
+repos.tasks	TaskRepo	list, get_by_id, add, update, delete, query
+repos.kb	KnowledgeBaseRepo	list, get_by_id, add, update, delete, search_by_topic, find_matching
+Все методы репозиториев работают с Pydantic-моделями (Contact, Product, Message, Order, Task, KnowledgeBaseItem), определёнными в core.models.
 
 get_db() — контекстный менеджер сессии
 get_db() открывает сессию SQLAlchemy, автоматически выполняет commit при успехе и rollback при исключении:
@@ -136,6 +138,22 @@ with get_db() as session:
     # session.commit() вызывается автоматически
     # при исключении — session.rollback()
 Если вам нужен прямой доступ к сессии без авто-коммита (например, для сложных транзакций), используйте get_session() (низкоуровневая функция, но лучше использовать get_db для простоты).
+
+### QueryBuilder — цепочечные запросы
+
+Каждый репозиторий поддерживает `query()`, возвращающий `QueryBuilder`:
+
+python
+with get_db() as session:
+    repos = RepoContainer(session)
+    # Фильтрация
+    high_tasks = repos.tasks.query().filter(status="pending", priority=TaskPriority.HIGH).all()
+    # Поиск + сортировка
+    found = repos.contacts.query().search("Alice", "name", "phone").sort("name").first()
+    # Подсчёт
+    count = repos.messages.query().filter(topic=Topic.COMPLAINT).count()
+
+Методы: `.filter(**kwargs)`, `.search(query, *fields)`, `.sort(key)`, `.limit(n)`, `.offset(n)`, `.all()`, `.first()`, `.count()`.
 
 Конфигурация
 python
@@ -221,40 +239,52 @@ except AppError as e:
     typer.echo(f"Application error: {e.message}", err=True)
     raise typer.Exit(code=e.exit_code)
 Тестирование
-conftest.py
+
+### Unit-тесты с MockRepo
+
+Используйте mock-репозитории из `ai_mini_box.testing`:
+
+python
+from ai_mini_box.testing import MockContactRepo, MockMessageRepo
+from ai_mini_box.core.models import Contact
+
+def test_my_logic():
+    repo = MockContactRepo()
+    c = repo.add(Contact(name="Test"))
+    assert repo.get_by_id(1).name == "Test"
+
+Доступные моки: `MockContactRepo`, `MockProductRepo`, `MockMessageRepo`, `MockOrderRepo`, `MockKnowledgeBaseRepo`.
+
+### Интеграционные тесты с БД
+
+Используйте in-memory SQLite:
+
 python
 import pytest
-from typer.testing import CliRunner
-from ai_mini_box.infrastructure.database import init_db, dispose_engine
-
-@pytest.fixture
-def runner():
-    return CliRunner()
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from ai_mini_box.infrastructure.database import Base
+from ai_mini_box.infrastructure import orm_models  # noqa: F401
 
 @pytest.fixture
 def db_session():
-    # Используем временную БД в памяти
-    init_db(":memory:")
-    from ai_mini_box.infrastructure.database import SessionLocal
-    session = SessionLocal()
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
     yield session
     session.close()
-    dispose_engine()
-test_commands.py (unit)
+    engine.dispose()
+
+**Не используйте `init_db()` в тестах** — он не создаёт таблицы. Используйте `Base.metadata.create_all(engine)`.
+
+### Smoke-тест регистрации CLI
+
 python
 from typer.testing import CliRunner
-from my_service.commands import service_app
+from ai_mini_box.cli import app
 
-def test_list(runner, db_session):
-    result = runner.invoke(service_app, ["list"])
-    assert result.exit_code == 0
-    # Проверяем вывод
-Для интеграционных тестов можно использовать CliRunner с основным приложением ai_mini_box.cli:app и проверять, что команда зарегистрирована.
-
-Smoke-тест регистрации
-python
-def test_cli_help(runner):
-    from ai_mini_box.cli import app
+def test_cli_help():
+    runner = CliRunner()
     result = runner.invoke(app, ["--help"])
     assert "my-service" in result.output
 Публикация
@@ -275,8 +305,22 @@ commands.py — 3 команды: demo-list, demo-get, demo-add
 tests/ — 5 unit + 4 E2E теста
 
 Заключение
+## Регистрация сервисов (для продвинутых плагинов)
+
+Если ваш плагин предоставляет функциональность для других плагинов (например, LLM, отправка уведомлений), используйте service registry:
+
+```python
+from ai_mini_box.core.services.registry import register_service, get_service
+
+# Ваш плагин регистрирует сервис
+register_service("notifier", my_notifier_instance)
+
+# Другой плагин получает сервис
+notifier = get_service("notifier")
+if notifier:
+    notifier.send("Hello!")
+```
+
+Подробнее — в `docs/plugins/10-service-registry.md`.
+
 Следуя этому руководству, вы сможете быстро создавать новые сервисы для экосистемы ai-mini-box. Если возникнут вопросы, изучите исходный код ядра и демо-сервиса, или обратитесь к документации проекта.
-
-text
-
----

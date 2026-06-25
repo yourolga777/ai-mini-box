@@ -74,6 +74,8 @@ def init(
     if not Path(db_path).exists() or force:
         init_db(db_path)
         typer.echo(f"  Created: {db_path}")
+        _run_migrations(Path(db_path))
+        typer.echo("  Migrations applied.")
 
     typer.echo("Done.")
 
@@ -108,9 +110,7 @@ def _get_migrations_dir() -> Path:
     raise FileNotFoundError("migrations directory not found — reinstall the package")
 
 
-@db_app.command()
-def upgrade():
-    """Apply database migrations."""
+def _run_migrations(db_path: Path | None = None):
     try:
         from alembic.config import Config
         from alembic import command
@@ -124,11 +124,17 @@ def upgrade():
         typer.echo(f"Error: {e}")
         raise typer.Exit(code=1)
 
-    db_path = Path("data/app.db").resolve()
+    db_path = db_path.resolve() if db_path else Path("data/app.db").resolve()
     alembic_cfg = Config()
     alembic_cfg.set_main_option("script_location", str(migrations_dir))
     alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
     command.upgrade(alembic_cfg, "head")
+
+
+@db_app.command()
+def upgrade():
+    """Apply database migrations."""
+    _run_migrations()
     typer.echo("  Migrations applied.")
 
 

@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -6,6 +7,10 @@ from sqlalchemy import pool
 from alembic import context
 
 config = context.config
+
+db_path = os.environ.get("AI_BOX_DB_PATH")
+if db_path:
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

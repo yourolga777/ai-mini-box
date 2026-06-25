@@ -23,12 +23,16 @@ ai-mini-box-my-plugin/
 
 ## Entry points
 
-A plugin registers itself via two entry point groups:
+A plugin registers itself via available entry point groups:
 
-| Group | Purpose |
-|---|---|
-| `ai_mini_box.tools` | Register CLI commands |
-| `ai_mini_box.help`  | Provide help sections for web UI |
+| Group | Purpose | Required |
+|---|---|---|
+| `ai_mini_box.tools` | Register CLI commands | **Yes** (always) |
+| `ai_mini_box.help`  | Provide help sections for web UI | No |
+| `ai_mini_box.llm`   | Register LLM service provider | No |
+| `ai_mini_box.services` | Register any other service for other plugins | No |
+
+Each group has a different registration target signature — see the specific doc for details.
 
 ## Requirements
 

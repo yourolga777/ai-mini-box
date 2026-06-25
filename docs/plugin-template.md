@@ -82,6 +82,7 @@ def register(app: typer.Typer):
 Если ваш плагин должен работать в фоне (демон), добавьте команду daemon:
 
 python
+import signal
 import time
 from ai_mini_box.infrastructure.logger import logger
 
@@ -97,19 +98,32 @@ def daemon():
     logger.info("Daemon started")
     while True:
         try:
-            # Ваша логика
-            logger.debug("Polling...")
+        stop = False
+
+        def _signal_handler(signum, frame):
+            nonlocal stop
+            stop = True
+            logger.info("Shutdown requested...")
+
+        signal.signal(signal.SIGINT, _signal_handler)
+        signal.signal(signal.SIGTERM, _signal_handler)
+
+        while not stop:
+            try:
+                # Ваша логика
+                logger.debug("Polling...")
+            except Exception as e:
+                logger.error(f"Error in daemon: {e}")
+
+            if stop:
+                break
             time.sleep(config.poll_interval)
-        except KeyboardInterrupt:
-            logger.info("Daemon stopped by user")
-            break
-        except Exception as e:
-            logger.error(f"Error in daemon: {e}")
-            time.sleep(5)
+
+        logger.info("Daemon stopped")
 Эта команда будет автоматически отображаться в веб-интерфейсе для управления (запуск/остановка). Убедитесь, что она пишет логи в стандартный логгер или в отдельный файл.
 
 Шаг 5. Использование репозиториев
-Пример команды, сохраняющей данные:
+Пример команды, сохраняющей данные (auto-commit через `get_db()`):
 
 python
 @plugin_app.command()
@@ -120,29 +134,51 @@ def process():
         for msg in messages:
             # обработка
             pass
-        session.commit()
-Шаг 6. Тестирование
-Создайте тесты, используя фикстуры из core (если они экспортируются) или собственные.
+        # session.commit() вызывается автоматически
 
-Пример unit-теста:
-
-python
-import pytest
-from typer.testing import CliRunner
-from ai_mini_box.cli import app
-from ai_mini_box.tests.mocks import MockContactRepo
-
-def test_hello_command():
-    runner = CliRunner()
-    result = runner.invoke(app, ["<plugin>", "hello"])
-    assert result.exit_code == 0
-    assert "Hello from <plugin>" in result.output
-Интеграционные тесты могут использовать временную БД:
+Шаг 6. Регистрация сервиса (опционально)
+Если ваш плагин предоставляет API для других плагинов (LLM, нотификации и т.п.), зарегистрируйте его в реестре сервисов:
 
 python
-def test_integration(cli_runner, db_session):
-    # ... используйте db_session для проверки сохранения данных
-Шаг 7. Документация
+from ai_mini_box.core.services.registry import register_service
+from ai_mini_box.core.services.llm import LlmService
+
+def register(app: typer.Typer):
+    register_service("my_service", MyServiceImpl())
+    app.add_typer(plugin_app, name="<plugin>")
+
+Шаг 7. Тестирование
+Используйте моки из `ai_mini_box.testing` — они не требуют БД:
+
+python
+from ai_mini_box.testing import MockContactRepo, MockMessageRepo
+from ai_mini_box.core.models import Contact, Message
+
+def test_my_logic():
+    repo = MockContactRepo()
+    c = repo.add(Contact(name="Test"))
+    assert repo.get_by_id(1).name == "Test"
+
+Интеграционные тесты с in-memory SQLite:
+
+python
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from ai_mini_box.infrastructure.database import Base
+from ai_mini_box.infrastructure import orm_models  # noqa: F401
+
+@pytest.fixture
+def db_session():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+    yield session
+    session.close()
+    engine.dispose()
+
+**Не используйте `init_db()` в тестах** — он не создаёт таблицы.
+
+Шаг 8. Документация
 Обновите README плагина, указав:
 
 Установку: pip install ai-mini-box-<plugin>
@@ -176,6 +212,8 @@ README содержит инструкцию по установке и испо
 Зависимости указаны корректно
 
 Плагин не импортирует другие плагины (только core)
+
+Плагин использует `ai_mini_box.testing` для моков (не `ai_mini_box.tests.mocks`)
 
 Заключение
 Следуя этому шаблону, вы сможете быстро создавать новые сервисы для экосистемы ai-mini-box. Если у вас возникнут вопросы, обращайтесь к руководству разработчика (developer-guide.md) или к исходному коду ядра и демо-плагина.

@@ -20,8 +20,12 @@ with get_db() as session:
 |---|---|---|
 | `repos.contacts` | Contact | `list()`, `get_by_id()`, `add()`, `update()`, `delete()`, `search()` |
 | `repos.products` | Product | `list()`, `get_by_id()`, `add()`, `update()`, `delete()`, `search()` |
-| `repos.messages` | Message | `list()`, `get_by_id()`, `add()`, `search()` |
+| `repos.messages` | Message | `list()`, `get_by_id()`, `add()`, `update()`, `search()` |
 | `repos.orders` | Order | `list()`, `get_by_id()`, `add()`, `update()` |
+| `repos.tasks` | Task | `list()`, `get_by_id()`, `add()`, `update()`, `delete()`, `query()` |
+| `repos.kb` | KnowledgeBaseItem | `list()`, `get_by_id()`, `add()`, `update()`, `delete()`, `search_by_topic()`, `find_matching()` |
+
+All methods work with Pydantic v2 models from `ai_mini_box.core.models`.
 
 ## List with filters
 
@@ -42,6 +46,41 @@ repos.contacts.list(telegram="123456")
 repos.contacts.search("Alice")
 ```
 
+## QueryBuilder — chainable query helper
+
+Every repository has a `query()` method that returns a `QueryBuilder` for complex in-memory filtering:
+
+```python
+# chained filter
+results = repos.tasks.query().filter(status="pending", priority=TaskPriority.HIGH).all()
+
+# filter + search + sort
+results = repos.contacts.query() \
+    .filter(telegram__isnot=None) \
+    .search("Alice", "name", "phone") \
+    .sort("name") \
+    .limit(10) \
+    .all()
+
+# count
+count = repos.tasks.query().filter(status="done").count()
+
+# first match
+task = repos.products.query().search("widget", "name").first()
+```
+
+Available chain methods:
+| Method | Purpose |
+|---|---|
+| `.filter(**kwargs)` | Exact field match (ignores None) |
+| `.search(query, *fields)` | Case-insensitive substring match |
+| `.sort(key, reverse=False)` | Sort by field |
+| `.limit(n)` | First n items |
+| `.offset(n)` | Skip n items |
+| `.all()` | Return full list |
+| `.first()` | Return first or None |
+| `.count()` | Return count |
+
 ## Create a record
 
 ```python
@@ -55,6 +94,8 @@ contact = Contact(
 )
 created = repos.contacts.add(contact)
 ```
+
+With `get_db()` auto-commit, you don't need to call `session.commit()`.
 
 ## Custom queries
 
@@ -72,10 +113,22 @@ with get_db() as session:
 
 | Model | Key fields |
 |---|---|
-| `Contact` | `id`, `name`, `phone`, `email`, `telegram`, `source` |
-| `Product` | `id`, `name`, `price` (int, kopecks) |
-| `Message` | `id`, `text`, `source`, `topic`, `contact_id`, `chat_id` |
-| `Order` | `id`, `status`, `items`, `total`, `contact_id` |
+| `Contact` | `id`, `name`, `phone`, `email`, `telegram`, `source`, `total_spent` |
+| `Product` | `id`, `name`, `price_kopecks` (int), `stock`, `unit`, `category` |
+| `Message` | `id`, `text`, `source`, `topic`, `contact_id`, `chat_id`, `draft_response`, `extracted_phone`, `extracted_name` |
+| `Order` | `id`, `status`, `total_kopecks`, `contact_id`, `source_message_id` |
+| `Task` | `id`, `title`, `description`, `due_date`, `due_time`, `priority` (TaskPriority), `status`, `contact_id`, `assignee` |
+| `KnowledgeBaseItem` | `id`, `topic`, `question_keywords` (list[str]), `answer_text` |
+
+## KnowledgeBase — matching logic
+
+`find_matching(text, topic)` returns KB entries whose `question_keywords` intersect with words in the text. Results sorted by match count descending.
+
+```python
+matches = repos.kb.find_matching("How much is delivery?", topic=Topic.ORDER)
+if matches:
+    typer.echo(matches[0].answer_text)
+```
 
 ## State persistence
 
@@ -113,5 +166,6 @@ from ai_mini_box.core.models import (
     MessageSource,   # TELEGRAM, EMAIL, WHATSAPP, SMS, MANUAL
     Topic,           # PRICES, ORDER, COMPLAINT, SCHEDULE, OTHER
     OrderStatus,     # NEW, PROCESSING, COMPLETED, CANCELLED
+    TaskPriority,    # LOW, MEDIUM, HIGH
 )
 ```

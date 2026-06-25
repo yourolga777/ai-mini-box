@@ -1,22 +1,22 @@
 # Full Plugin Example
 
-This example shows a complete plugin that fetches weather data and stores it in the database.
+This example shows a complete plugin that monitors product stock levels and sends notifications.
 
 ## Directory structure
 
 ```
-ai-mini-box-weather/
-├── ai_mini_box_weather/
+ai-mini-box-stockwatch/
+├── ai_mini_box_stockwatch/
 │   ├── __init__.py
 │   ├── commands.py
-│   ├── fetcher.py
+│   ├── watcher.py
 │   └── help/
 │       00-installation.md
 │       01-commands.md
 ├── tests/
 │   ├── __init__.py
 │   ├── test_commands.py
-│   └── test_fetcher.py
+│   └── test_watcher.py
 ├── pyproject.toml
 ├── README.md
 └── LICENSE
@@ -30,28 +30,27 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ai-mini-box-weather"
+name = "ai-mini-box-stockwatch"
 version = "0.1.0"
-description = "Weather plugin for ai-mini-box"
+description = "Stock level monitoring plugin for ai-mini-box"
 requires-python = ">=3.12"
 readme = "README.md"
 license = { file = "LICENSE" }
 dependencies = [
     "ai-mini-box-core>=5.0.0",
-    "requests>=2.31",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-mock>=3"]
 
 [project.entry-points."ai_mini_box.tools"]
-weather = "ai_mini_box_weather.commands:register"
+stockwatch = "ai_mini_box_stockwatch.commands:register"
 
 [project.entry-points."ai_mini_box.help"]
-weather = "ai_mini_box_weather"
+stockwatch = "ai_mini_box_stockwatch"
 
 [tool.hatch.build]
-include = ["ai_mini_box_weather/**"]
+include = ["ai_mini_box_stockwatch/**"]
 ```
 
 ## commands.py
@@ -59,108 +58,117 @@ include = ["ai_mini_box_weather/**"]
 ```python
 import typer
 from loguru import logger
+from ai_mini_box.core.container import RepoContainer
 from ai_mini_box.infrastructure.database import get_db
 from ai_mini_box.infrastructure.config import JsonConfigManager
 
-logger.add("logs/plugin_weather.log", rotation="1 MB", retention=3)
+logger.add("logs/plugin_stockwatch.log", rotation="1 MB", retention=3)
 
 
 def register(app: typer.Typer):
-    weather = typer.Typer(help="Weather commands")
-    app.add_typer(weather, name="weather")
+    sw = typer.Typer(help="Stock monitoring commands")
+    app.add_typer(sw, name="stockwatch")
 
-    @weather.command()
-    def fetch(city: str = typer.Argument(..., help="City name")):
-        """Fetch weather for a city."""
-        from .fetcher import get_weather
+    @sw.command()
+    def check(threshold: int = typer.Option(5, help="Min stock threshold")):
+        """List products with stock below threshold."""
+        with get_db() as session:
+            repos = RepoContainer(session)
+            low_stock = [
+                p for p in repos.products.list()
+                if p.stock < threshold
+            ]
+            if not low_stock:
+                typer.echo("All products above threshold.")
+                return
+            for p in low_stock:
+                typer.echo(f"{p.name}: stock={p.stock} (below {threshold})")
+            logger.warning(f"Found {len(low_stock)} products below threshold")
+
+    @sw.command()
+    def daemon():
+        """Run continuous stock monitoring."""
         config = JsonConfigManager().load()
-        api_key = config.telegram_token  # example: reuse telegram_token field
-        if not api_key:
-            typer.echo("Error: api key not configured")
-            raise typer.Exit(1)
-        try:
-            data = get_weather(city, api_key)
-            typer.echo(f"Weather in {city}: {data['temp']}°C, {data['description']}")
-            logger.info(f"Fetched weather for {city}: {data['temp']}°C")
-        except Exception as e:
-            logger.error(f"Failed to fetch weather: {e}")
-            typer.echo(f"Error: {e}")
-            raise typer.Exit(1)
+        logger.info(f"StockWatch daemon started (interval={config.poll_interval}s)")
+        while True:
+            try:
+                with get_db() as session:
+                    repos = RepoContainer(session)
+                    low_stock = [p for p in repos.products.list() if p.stock < 5]
+                    if low_stock:
+                        names = ", ".join(p.name for p in low_stock)
+                        logger.warning(f"Low stock: {names}")
+            except Exception as e:
+                logger.error(f"Check error: {e}")
+            import time
+            time.sleep(config.poll_interval)
 ```
 
-## fetcher.py
+## watcher.py
 
 ```python
-import requests
+from ai_mini_box.core.models import Product
 
 
-def get_weather(city: str, api_key: str) -> dict:
-    url = "https://api.openweathermap.org/data/2.5/weather"
-    params = {"q": city, "appid": api_key, "units": "metric"}
-    resp = requests.get(url, params=params, timeout=10)
-    resp.raise_for_status()
-    data = resp.json()
-    return {
-        "temp": data["main"]["temp"],
-        "description": data["weather"][0]["description"],
-    }
+def find_low_stock(products: list[Product], threshold: int = 5) -> list[Product]:
+    """Filter products whose stock is below threshold."""
+    return [p for p in products if p.stock < threshold]
 ```
 
 ## help/00-installation.md
 
 ```markdown
-# Weather Plugin
+# Stock Watch Plugin
 
-Fetches current weather data from OpenWeatherMap.
+Monitors product stock levels and alerts when inventory runs low.
 
 ## Install
 
 ```bash
-pip install ai-mini-box-weather
+pip install ai-mini-box-stockwatch
 ```
 
-## Configure
+## Commands
 
-```bash
-ai-mini-box config set telegram_token "your_openweathermap_api_key"
+- `ai-mini-box stockwatch check --threshold 5` — one-time check
+- `ai-mini-box stockwatch daemon` — continuous monitoring
 ```
 ```
 
-## help/01-commands.md
-
-```markdown
-# Commands
-
-| Command | Description |
-|---|---|
-| `ai-mini-box weather fetch <city>` | Fetch weather for a city |
-```
-
-## tests/test_fetcher.py
+## tests/test_watcher.py
 
 ```python
-import pytest
-from ai_mini_box_weather.fetcher import get_weather
+from ai_mini_box_stockwatch.watcher import find_low_stock
+from ai_mini_box.core.models import Product
 
 
-class TestGetWeather:
-    def test_returns_temp_and_description(self, mocker):
-        mock_resp = mocker.Mock()
-        mock_resp.json.return_value = {
-            "main": {"temp": 22.5},
-            "weather": [{"description": "clear sky"}],
-        }
-        mock_resp.raise_for_status.return_value = None
-        mocker.patch("requests.get", return_value=mock_resp)
+def test_find_low_stock_returns_low_items():
+    products = [
+        Product(name="A", stock=2),
+        Product(name="B", stock=10),
+        Product(name="C", stock=0),
+    ]
+    result = find_low_stock(products, threshold=5)
+    assert [p.name for p in result] == ["A", "C"]
 
-        result = get_weather("London", "fake_key")
-        assert result["temp"] == 22.5
-        assert result["description"] == "clear sky"
 
-    def test_raises_on_network_error(self, mocker):
-        mocker.patch("requests.get", side_effect=requests.ConnectionError)
-        with pytest.raises(requests.ConnectionError):
-            get_weather("London", "fake_key")
+def test_find_low_stock_empty_when_all_ok():
+    products = [Product(name="A", stock=10), Product(name="B", stock=20)]
+    assert find_low_stock(products, threshold=5) == []
+```
+
+## tests/test_commands.py (integration)
+
+```python
+from typer.testing import CliRunner
+from ai_mini_box.cli import app
+
+
+def test_check_command_registered():
+    runner = CliRunner()
+    result = runner.invoke(app, ["stockwatch", "--help"])
+    assert result.exit_code == 0
+    assert "check" in result.output
 ```
 
 ## After publishing
@@ -168,6 +176,6 @@ class TestGetWeather:
 Users install and use:
 
 ```bash
-pip install ai-mini-box-weather
-ai-mini-box weather fetch Moscow
+pip install ai-mini-box-stockwatch
+ai-mini-box stockwatch check --threshold 3
 ```

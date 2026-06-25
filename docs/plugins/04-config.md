@@ -15,26 +15,149 @@ interval = config.poll_interval     # int
 allowed_ids = config.telegram_allowed_chat_ids  # list[int]
 ```
 
+Sensitive fields (`telegram_token`, `email_password`, `whatsapp_api_key`, etc.) are automatically encrypted with Fernet (PBKDF2HMAC) when saved and decrypted on load. The encryption key is derived from `AI_BOX_SECRET` env var (or `"default-dev-secret"` fallback).
+
+## Environment variable overrides
+
+Any config field can be overridden via `AI_BOX_<FIELD_NAME>` env var:
+
+```bash
+set AI_BOX_TELEGRAM_TOKEN=my_token
+set AI_BOX_POLL_INTERVAL=15
+```
+
+Env vars take priority over JSON file values. Useful for secrets in production and for tests.
+
 ## Available config fields
+
+Config is grouped into sections. All fields are defined in the `AppConfig` Pydantic model.
+
+### Telegram
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `telegram_token` | `str` | `""` | Telegram bot token |
-| `telegram_allowed_chat_ids` | `list[int]` | `[]` | Allowed chat IDs |
-| `email_imap_server` | `str` | `""` | IMAP server |
+| `telegram_token` | `str` | `""` | Bot token (encrypted) |
+| `telegram_bot_name` | `str` | `""` | Bot display name |
+| `telegram_bot_username` | `str` | `""` | Bot @username |
+| `telegram_allowed_chat_ids` | `list[int]` | `[]` | Allowed chat/group IDs |
+
+### Email
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `email_imap_server` | `str` | `imap.yandex.ru` | IMAP server host |
+| `email_imap_port` | `int` | `993` | IMAP server port |
 | `email_login` | `str` | `""` | Email login |
 | `email_password` | `str` | `""` | Email password (encrypted) |
-| `poll_interval` | `int` | `30` | Poll interval in seconds |
 
-Sensitive fields (password, token) are automatically encrypted with Fernet when saved.
+### LLM
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `llm_model_path` | `str` | `models/Phi-3-mini-q4.gguf` | Path to GGUF model |
+| `llm_n_ctx` | `int` | `4096` | Context window size |
+| `llm_n_threads` | `int` | `4` | CPU threads for inference |
+
+### WhatsApp
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `whatsapp_api_key` | `str` | `""` | API key (encrypted) |
+| `whatsapp_phone` | `str` | `""` | Business phone number |
+
+### SMS
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `sms_provider` | `str` | `""` | SMS provider name |
+| `sms_api_key` | `str` | `""` | SMS API key (encrypted) |
+| `sms_api_secret` | `str` | `""` | SMS API secret (encrypted) |
+
+### Payments: YooKassa
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `yookassa_shop_id` | `str` | `""` | Shop ID |
+| `yookassa_secret_key` | `str` | `""` | Secret key (encrypted) |
+
+### Payments: Tinkoff
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `tinkoff_terminal_key` | `str` | `""` | Terminal key |
+| `tinkoff_password` | `str` | `""` | Password (encrypted) |
+
+### Payments: Sber
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `sber_merchant_id` | `str` | `""` | Merchant ID |
+| `sber_login` | `str` | `""` | Login |
+| `sber_password` | `str` | `""` | Password (encrypted) |
+
+### Schedule
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `work_schedule_start` | `str` | `09:00` | Work day start (HH:MM) |
+| `work_schedule_end` | `str` | `18:00` | Work day end (HH:MM) |
+
+### Notifications
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `notification_on_order` | `bool` | `True` | Notify on new order |
+| `notification_on_complaint` | `bool` | `True` | Notify on complaint |
+| `notification_on_error` | `bool` | `True` | Notify on system error |
+
+### General
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `poll_interval` | `int` | `30` | Daemon poll interval (seconds) |
+| `auto_backup_interval` | `int` | `0` | Auto-backup interval (hours, 0 = disabled) |
 
 ## Setting config from CLI
 
 ```bash
 ai-mini-box config set telegram_token "your_token_here"
 ai-mini-box config set poll_interval 15
+ai-mini-box config set telegram_allowed_chat_ids "[123,456]"
 ```
 
-## Adding custom config (for advanced use)
+Type coercion is automatic: `"15"` → `int`, `"true"` → `bool`, `"[1,2,3]"` → `list[int]`.
 
-If your plugin needs custom config fields, you can extend the config model (requires modifying core). For simple cases, use environment variables or a separate config file.
+## Custom config for your plugin
+
+If your plugin needs custom settings, **don't extend `AppConfig`**. Instead, use one of these patterns:
+
+### Option A — Separate JSON file (recommended)
+
+```python
+import json
+from pathlib import Path
+
+class MyPluginConfig:
+    def __init__(self, path: str = "data/my_plugin_config.json"):
+        self.path = Path(path)
+
+    def load(self) -> dict:
+        if not self.path.exists():
+            return {}
+        return json.loads(self.path.read_text(encoding="utf-8"))
+
+    def save(self, data: dict):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+```
+
+### Option B — Environment variables
+
+```bash
+set MY_PLUGIN_API_KEY=abc123
+```
+
+```python
+import os
+api_key = os.environ.get("MY_PLUGIN_API_KEY", "")
+```

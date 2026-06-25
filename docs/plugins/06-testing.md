@@ -1,6 +1,6 @@
 # Testing
 
-Use pytest with the core's testing utilities.
+Use pytest with the core's testing utilities. All models, enums and mock repositories are importable from `ai_mini_box.testing` and `ai_mini_box.core.models`.
 
 ## Test structure
 
@@ -9,42 +9,49 @@ tests/
 ├── __init__.py
 ├── unit/
 │   ├── __init__.py
-│   └── test_bot.py
+│   └── test_commands.py
 └── integration/
     ├── __init__.py
-    └── test_commands.py
+    └── test_cli.py
 ```
 
-## Unit testing CLI commands
+## Unit testing with mock repositories
 
-Use Typer's `CliRunner` to test commands:
+Use mock repos from `ai_mini_box.testing` to test your logic without a database:
 
 ```python
 # tests/unit/test_commands.py
 from typer.testing import CliRunner
-from ai_mini_box.cli import app   # the main CLI app
+from ai_mini_box.testing import MockContactRepo
 
 
 class TestMyPlugin:
     def test_my_command(self):
-        runner = CliRunner()
-        result = runner.invoke(app, ["my-plugin", "list"])
-        assert result.exit_code == 0
-        assert "items" in result.output
+        repo = MockContactRepo()
+        contact = repo.add(Contact(name="Alice"))
+        assert contact.id == 1
+        assert repo.get_by_id(1).name == "Alice"
 ```
+
+Available mocks: `MockContactRepo`, `MockProductRepo`, `MockMessageRepo`, `MockOrderRepo`, `MockKnowledgeBaseRepo`.
 
 ## Integration testing with database
 
+Integration tests create an in-memory SQLite database with the full schema:
+
 ```python
-# tests/integration/test_commands.py
+# tests/integration/test_cli.py
 import json
 from pathlib import Path
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from typer.testing import CliRunner
 
 from ai_mini_box.cli import app
-from ai_mini_box.infrastructure.database import init_db, dispose_engine
+from ai_mini_box.infrastructure.database import Base
+from ai_mini_box.infrastructure import orm_models  # noqa: F401 — registers tables on Base
 
 
 @pytest.fixture
@@ -52,28 +59,30 @@ def runner():
     return CliRunner()
 
 
-@pytest.fixture(autouse=True)
-def setup_db(monkeypatch, tmp_path):
-    db_path = tmp_path / "test.db"
-    init_db(db_path)
-    monkeypatch.setattr(
-        "ai_mini_box.infrastructure.database.get_db_path",
-        lambda: db_path,
-    )
-    yield
-    dispose_engine()
+@pytest.fixture
+def db_session(tmp_path):
+    """In-memory SQLite with full schema, per-test isolation."""
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+    yield session
+    session.close()
+    engine.dispose()
 
 
-def test_list_contacts(runner):
-    result = runner.invoke(app, ["demo-list"])
+def test_list_contacts(runner, db_session):
+    result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
 ```
+
+**Note:** Do NOT use `init_db()` in tests — use `Base.metadata.create_all(engine)` and `sessionmaker` directly. This gives you full control over the schema lifecycle.
 
 ## Mocking config
 
 ```python
 @pytest.fixture
 def tmp_config(tmp_path: Path) -> Path:
+    import json
     config = tmp_path / "config.json"
     config.write_text(json.dumps({
         "telegram_token": "test:token",
@@ -81,6 +90,16 @@ def tmp_config(tmp_path: Path) -> Path:
         "poll_interval": 30,
     }))
     return config
+```
+
+To override via env (useful for `AI_BOX_DB_PATH`):
+
+```python
+def test_with_env_override(monkeypatch):
+    monkeypatch.setenv("AI_BOX_TELEGRAM_TOKEN", "env_token")
+    from ai_mini_box.infrastructure.config import JsonConfigManager
+    config = JsonConfigManager().load()
+    assert config.telegram_token == "env_token"
 ```
 
 ## Mocking external services
