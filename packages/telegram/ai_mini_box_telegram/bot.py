@@ -27,6 +27,18 @@ class TelegramBot:
             raise TelegramAPIError(data.get("description", "Unknown error"), status_code=0)
         return data["result"]
 
+    def get_me(self) -> dict:
+        url = self._url("getMe")
+        try:
+            resp = requests.get(url, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+        except requests.exceptions.RequestException as e:
+            raise TelegramAPIError(str(e), status_code=getattr(e.response, "status_code", 0)) from e
+        if not data.get("ok"):
+            raise TelegramAPIError(data.get("description", "Unknown error"), status_code=0)
+        return data["result"]
+
     def send_message(self, chat_id: int, text: str) -> bool:
         url = self._url("sendMessage")
         try:

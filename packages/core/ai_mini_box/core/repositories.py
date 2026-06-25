@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from .models import Contact, Message, Order, Product
+from .models import Contact, KnowledgeBaseItem, Message, Order, Product, Task, Topic
 
 
 class QueryBuilder:
@@ -126,6 +126,10 @@ class MessageRepo(ABC):
         ...
 
     @abstractmethod
+    def update(self, message: Message) -> Message:
+        ...
+
+    @abstractmethod
     def search(self, query: str, topic: Optional[str] = None) -> list[Message]:
         ...
 
@@ -152,9 +156,61 @@ class OrderRepo(ABC):
         ...
 
 
-@dataclass
-class RepoContainer:
-    contacts: ContactRepo
-    products: ProductRepo
-    messages: MessageRepo
-    orders: OrderRepo
+class TaskRepo(ABC):
+    @abstractmethod
+    def query(self) -> QueryBuilder:
+        ...
+
+    @abstractmethod
+    def list(self, limit: int = 50, offset: int = 0, **filters) -> list[Task]:
+        ...
+
+    @abstractmethod
+    def get_by_id(self, id: int) -> Optional[Task]:
+        ...
+
+    @abstractmethod
+    def add(self, task: Task) -> Task:
+        ...
+
+    @abstractmethod
+    def update(self, task: Task) -> Task:
+        ...
+
+    @abstractmethod
+    def delete(self, id: int) -> bool:
+        ...
+
+
+class KnowledgeBaseRepo(ABC):
+    @abstractmethod
+    def query(self) -> QueryBuilder:
+        ...
+
+    @abstractmethod
+    def list(self, limit: int = 20, offset: int = 0, sort: str = "created_at", **filters) -> list[KnowledgeBaseItem]:
+        ...
+
+    @abstractmethod
+    def get_by_id(self, id: int) -> Optional[KnowledgeBaseItem]:
+        ...
+
+    @abstractmethod
+    def add(self, item: KnowledgeBaseItem) -> KnowledgeBaseItem:
+        ...
+
+    @abstractmethod
+    def update(self, item: KnowledgeBaseItem) -> KnowledgeBaseItem:
+        ...
+
+    @abstractmethod
+    def delete(self, id: int) -> bool:
+        ...
+
+    @abstractmethod
+    def search_by_topic(self, topic: Topic) -> list[KnowledgeBaseItem]:
+        ...
+
+    @abstractmethod
+    def find_matching(self, text: str, topic: Optional[Topic] = None) -> list[KnowledgeBaseItem]:
+        ...

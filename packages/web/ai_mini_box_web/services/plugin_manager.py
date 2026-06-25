@@ -10,7 +10,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from ai_mini_box.infrastructure.config import JsonConfigManager
+from ai_mini_box.infrastructure.config import JsonConfigManager, SENSITIVE_FIELDS
 
 PACKAGE_RE = re.compile(r"^ai[-_]mini[-_]box[-_]", re.IGNORECASE)
 PROTECTED_PLUGINS = frozenset({"core", "web"})
@@ -161,7 +161,11 @@ class PluginManager:
 
     def get_config(self) -> dict:
         config = JsonConfigManager().load()
-        return config.model_dump()
+        data = config.model_dump()
+        for key in SENSITIVE_FIELDS:
+            if key in data and data[key]:
+                data[key] = "***"
+        return data
 
     def set_config(self, key: str, value) -> dict:
         manager = JsonConfigManager()

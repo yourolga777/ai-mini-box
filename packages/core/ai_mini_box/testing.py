@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from ai_mini_box.core.models import Contact, Message, Order, Product
+from ai_mini_box.core.models import Contact, KnowledgeBaseItem, Message, Order, Product, Topic
 from ai_mini_box.core.repositories import (
     ContactRepo,
+    KnowledgeBaseRepo,
     MessageRepo,
     OrderRepo,
     ProductRepo,
@@ -113,6 +114,9 @@ class MockMessageRepo(MessageRepo):
     def add(self, message: Message) -> Message:
         return self._store.add(message)
 
+    def update(self, message: Message) -> Message:
+        return self._store.update(message)
+
     def search(self, query: str, topic: Optional[str] = None) -> list[Message]:
         results = self._store.query().search(query, "text").all()
         if topic:
@@ -139,3 +143,50 @@ class MockOrderRepo(OrderRepo):
 
     def update(self, order: Order) -> Order:
         return self._store.update(order)
+
+
+class MockKnowledgeBaseRepo(KnowledgeBaseRepo):
+    def __init__(self):
+        self._store = _MemoryStore()
+
+    def query(self) -> QueryBuilder:
+        return self._store.query()
+
+    def list(self, limit=20, offset=0, sort="created_at", **filters):
+        q = self._store.query()
+        items = q.filter(**filters).all()
+        items.sort(key=lambda i: getattr(i, sort, "") or "", reverse=True)
+        return items[offset:offset + limit]
+
+    def get_by_id(self, id: int) -> Optional[KnowledgeBaseItem]:
+        return self._store.get(id)
+
+    def add(self, item: KnowledgeBaseItem) -> KnowledgeBaseItem:
+        return self._store.add(item)
+
+    def update(self, item: KnowledgeBaseItem) -> KnowledgeBaseItem:
+        return self._store.update(item)
+
+    def delete(self, id: int) -> bool:
+        return self._store.delete(id)
+
+    def search_by_topic(self, topic: Topic) -> list[KnowledgeBaseItem]:
+        return self._store.query().filter(topic=topic).all()
+
+    def find_matching(self, text: str, topic: Optional[Topic] = None) -> list[KnowledgeBaseItem]:
+        text_words = set(text.lower().split())
+        all_items = self._store.query().all()
+        if topic:
+            all_items = [i for i in all_items if i.topic == topic]
+
+        scored = []
+        for item in all_items:
+            keywords = [kw.strip().lower() for kw in item.question_keywords if kw.strip()]
+            if not keywords:
+                continue
+            match_count = len(text_words & set(keywords))
+            if match_count > 0:
+                scored.append((match_count, item))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [item for _, item in scored]

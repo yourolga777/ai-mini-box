@@ -152,6 +152,35 @@ def stop_plugin_daemon(name: str):
     return result
 
 
+@router.post("/{name}/verify-token")
+def verify_token(name: str):
+    if name != "telegram":
+        raise HTTPException(400, detail="Only telegram plugin supports token verification")
+
+    from ai_mini_box.infrastructure.config import JsonConfigManager
+    raw = JsonConfigManager().load()
+    token = raw.telegram_token
+    if not token:
+        raise HTTPException(400, detail="telegram_token not set")
+
+    from ai_mini_box_telegram.bot import TelegramBot
+    bot = TelegramBot(token)
+    try:
+        me = bot.get_me()
+    except Exception as e:
+        raise HTTPException(502, detail=f"Telegram API error: {e}")
+
+    bot_name: str = me.get("first_name", "")
+    bot_username: str = me.get("username", "")
+
+    if bot_name:
+        _manager.set_config("telegram_bot_name", bot_name)
+    if bot_username:
+        _manager.set_config("telegram_bot_username", bot_username)
+
+    return {"success": True, "bot_name": bot_name, "bot_username": bot_username}
+
+
 @router.post("/{name}/action")
 def plugin_action(name: str, body: ActionRequest):
     if name == "telegram" and body.action == "poll":
@@ -186,20 +215,32 @@ def _run_poll():
         raise HTTPException(502, detail=f"Telegram API error: {e}")
 
     count = 0
+    detected_chat_ids: list[int] = []
     for update in updates:
         with get_db() as session:
             if process_update(update, session, allowed_chat_ids=allowed):
                 count += 1
-                state.save_offset(update["update_id"] + 1)
+        state.save_offset(update["update_id"] + 1)
+        msg_data = update.get("message") or update.get("business_message")
+        if msg_data:
+            cid = msg_data["chat"]["id"]
+            if cid not in detected_chat_ids:
+                detected_chat_ids.append(cid)
 
-    return {"success": True, "count": count, "output": f"Processed {count} new messages"}
+    return {
+        "success": True,
+        "count": count,
+        "detected_chat_ids": detected_chat_ids,
+        "output": f"Processed {count} new messages",
+    }
 
 
 def _resolve_telegram_config() -> tuple:
-    config = _manager.get_config()
-    token = config.get("telegram_token", "")
-    allowed = config.get("telegram_allowed_chat_ids", [])
-    interval = config.get("poll_interval", 30)
+    from ai_mini_box.infrastructure.config import JsonConfigManager
+    raw = JsonConfigManager().load()
+    token = raw.telegram_token
+    allowed = raw.telegram_allowed_chat_ids
+    interval = raw.poll_interval
     return token, allowed, interval
 
 

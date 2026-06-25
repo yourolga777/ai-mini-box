@@ -34,7 +34,7 @@ def _do_poll(bot: TelegramBot, state: FileTelegramStateRepo, allowed_chat_ids: l
         with get_db() as session:
             if process_update(update, session, allowed_chat_ids=allowed_chat_ids):
                 count += 1
-                state.save_offset(update["update_id"] + 1)
+        state.save_offset(update["update_id"] + 1)
     return count
 
 

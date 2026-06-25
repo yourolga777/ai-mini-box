@@ -168,4 +168,35 @@ Always respond in the user's language.
 - Save useful patterns to project memory
 
 <!-- DYNAMIC:START -->
+## Session Handoff (24 Jun 2026)
+
+### Completed
+- Core: Task model (TaskPriority enum, Task dataclass with due_date/due_time/priority/status/contact_id/assignee)
+- Core: TaskRepo ABC + SqliteTaskRepo + TaskModel ORM + migration d9a1b2c3e4f5
+- Core: RepoContainer.tasks, mapping functions
+- Backend: /api/tasks CRUD + month/status/date filters
+- Frontend: Calendar.tsx (day/week/month/year views, inline add, toggle complete, priority colors)
+- Route /calendar + sidebar link
+- Fixed: Telegram plugin not showing in web UI (trailing slash mismatch in plugins.py)
+- Каркас (prompt-каркас.md) updated with Task model, TaskRepo, MockTaskRepo
+- Full backup: PROJECT_SUMMARY.md + ZIP + git bundle
+- Tags v5.0.1 / web-v0.1.1 pushed
+
+### Test Results
+- Core: 74/74 passed
+- Web: 41/41 passed
+- Frontend build: OK
+
+### Dead Ends
+- None documented this session
+
+### Next Steps
+- Publish v5.0.1/web-v0.1.1 to PyPI (CI should auto-publish from tags)
+- Calendar: drag-drop tasks, recurring events, Telegram reminders
+- Run `alembic upgrade head` on any fresh DB
+
+### Warnings
+- GitHub PAT expires 22 Jul 2026
+- test_update_checker.py has 3 pre-existing failures (mock issue)
+- Port 8080 (8000 used by BrandForge)
 <!-- DYNAMIC:END -->

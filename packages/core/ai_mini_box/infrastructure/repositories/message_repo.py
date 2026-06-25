@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from sqlalchemy.orm import Session
 
 from ai_mini_box.core.models import Message
@@ -25,7 +25,7 @@ class SqliteMessageRepo(MessageRepo):
             if value is not None and hasattr(MessageModel, key):
                 stmt = stmt.where(getattr(MessageModel, key) == value)
         if sort and hasattr(MessageModel, sort):
-            stmt = stmt.order_by(getattr(MessageModel, sort))
+            stmt = stmt.order_by(desc(getattr(MessageModel, sort)))
         stmt = stmt.limit(limit).offset(offset)
         orm_objs = self.session.execute(stmt).scalars().all()
         return [message_from_orm(o) for o in orm_objs]
@@ -37,6 +37,17 @@ class SqliteMessageRepo(MessageRepo):
     def add(self, message: Message) -> Message:
         orm_obj = message_to_orm(message)
         self.session.add(orm_obj)
+        self.session.flush()
+        self.session.refresh(orm_obj)
+        return message_from_orm(orm_obj)
+
+    def update(self, message: Message) -> Message:
+        orm_obj = self.session.get(MessageModel, message.id)
+        if not orm_obj:
+            from ai_mini_box.core.exceptions import NotFoundError
+            raise NotFoundError("Message", message.id)
+        for field, value in message.model_dump(exclude_unset=True).items():
+            setattr(orm_obj, field, value)
         self.session.flush()
         self.session.refresh(orm_obj)
         return message_from_orm(orm_obj)

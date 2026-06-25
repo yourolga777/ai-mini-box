@@ -17,7 +17,7 @@ export const api = {
   list: <T>(path: string) => request<T[]>(`/api/${path}`),
   get: <T>(path: string, id: number | string) => request<T>(`/api/${path}/${id}`),
   create: <T>(path: string, data: unknown) =>
-    request<T>(`/api/${path}/`, { method: "POST", body: JSON.stringify(data) }),
+    request<T>(`/api/${path}`, { method: "POST", body: JSON.stringify(data) }),
   update: <T>(path: string, id: number, data: unknown) =>
     request<T>(`/api/${path}/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: (path: string, id: number | string) =>
@@ -33,7 +33,7 @@ export const api = {
       `/api/plugins/${name}/stop`, { method: "POST" },
     ),
   pluginAction: (name: string, action: string) =>
-    request<{ success: boolean; count?: number; output: string }>(
+    request<{ success: boolean; count?: number; output: string; detected_chat_ids?: number[] }>(
       `/api/plugins/${name}/action`, { method: "POST", body: JSON.stringify({ action }) },
     ),
 
@@ -59,6 +59,12 @@ export const api = {
     request<{ installed: boolean }>(`/api/plugins/check/package?package=${encodeURIComponent(pkg)}`),
   uninstallPlugin: (name: string) =>
     request<{ success: boolean; output: string }>(`/api/plugins/${name}`, { method: "DELETE" }),
+
+  // telegram
+  verifyToken: (name: string) =>
+    request<{ success: boolean; bot_name: string; bot_username: string }>(
+      `/api/plugins/${name}/verify-token`, { method: "POST" },
+    ),
 
   // config
   getConfig: () => request<Record<string, unknown>>("/api/plugins/config"),

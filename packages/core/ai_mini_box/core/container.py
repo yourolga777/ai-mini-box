@@ -5,9 +5,11 @@ from sqlalchemy.orm import Session
 
 from ai_mini_box.infrastructure.repositories import (
     SqliteContactRepo,
+    SqliteKnowledgeBaseRepo,
     SqliteMessageRepo,
     SqliteOrderRepo,
     SqliteProductRepo,
+    SqliteTaskRepo,
 )
 
 
@@ -18,6 +20,8 @@ class RepoContainer:
         self.products = SqliteProductRepo(session)
         self.messages = SqliteMessageRepo(session)
         self.orders = SqliteOrderRepo(session)
+        self.tasks = SqliteTaskRepo(session)
+        self.kb = SqliteKnowledgeBaseRepo(session)
 
 
 @dataclass

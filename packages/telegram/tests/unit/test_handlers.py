@@ -1,7 +1,7 @@
 import pytest
 
 from ai_mini_box.core.models import Contact, Message, MessageSource, Topic
-from ai_mini_box.testing import MockContactRepo, MockMessageRepo
+from ai_mini_box.testing import MockContactRepo, MockMessageRepo, MockKnowledgeBaseRepo
 
 from ai_mini_box_telegram.handlers import process_update
 
@@ -15,6 +15,7 @@ def mock_repos(mocker):
         def __init__(self, session):
             self.contacts = contact_repo
             self.messages = message_repo
+            self.kb = MockKnowledgeBaseRepo()
 
     mocker.patch(
         "ai_mini_box_telegram.handlers.RepoContainer",
@@ -37,6 +38,17 @@ class FakeUpdate:
     @staticmethod
     def no_message(update_id=1):
         return {"update_id": update_id}
+
+    @staticmethod
+    def business_message(update_id=1, chat_id=123, text="Business hello"):
+        return {
+            "update_id": update_id,
+            "business_message": {
+                "chat": {"id": chat_id},
+                "text": text,
+                "from": {"first_name": "Biz", "last_name": "User"},
+            },
+        }
 
 
 class TestProcessUpdate:
@@ -96,6 +108,27 @@ class TestProcessUpdate:
         session = mocker.Mock()
         update = FakeUpdate.no_message()
         result = process_update(update, session)
+
+        assert result is False
+        assert len(message_repo.list()) == 0
+
+    def test_handles_business_message(self, mock_repos, mocker):
+        _, message_repo = mock_repos
+        session = mocker.Mock()
+        update = FakeUpdate.business_message()
+        result = process_update(update, session)
+
+        assert result is True
+        messages = message_repo.list()
+        assert len(messages) == 1
+        assert messages[0].text == "Business hello"
+        assert messages[0].extracted_name == "Biz User"
+
+    def test_handles_business_message_filters_chat(self, mock_repos, mocker):
+        _, message_repo = mock_repos
+        session = mocker.Mock()
+        update = FakeUpdate.business_message(chat_id=999)
+        result = process_update(update, session, allowed_chat_ids=[123])
 
         assert result is False
         assert len(message_repo.list()) == 0

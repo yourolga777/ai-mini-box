@@ -24,6 +24,8 @@ def _derive_key(secret: str, salt: bytes) -> bytes:
 
 class AppConfig(BaseModel):
     telegram_token: str = ""
+    telegram_bot_name: str = ""
+    telegram_bot_username: str = ""
     telegram_allowed_chat_ids: list[int] = Field(default_factory=list)
     email_imap_server: str = "imap.yandex.ru"
     email_imap_port: int = 993

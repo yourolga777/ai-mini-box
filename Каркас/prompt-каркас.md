@@ -38,7 +38,8 @@ ai-mini-box-core/
     │       ├── contact_repo.py
     │       ├── product_repo.py
     │       ├── message_repo.py
-    │       └── order_repo.py
+    │       ├── order_repo.py
+    │       └── task_repo.py
     │
     ├── tools/                        # ★ Точка подключения сервисов
     │   └── __init__.py               # пустой, для namespace packages
@@ -110,7 +111,7 @@ for module_info in pkgutil.iter_modules(ai_mini_box.tools.__path__):
 
 ```python
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Optional
 
@@ -120,6 +121,11 @@ class Topic(str, Enum):
     COMPLAINT = "Жалоба"
     SCHEDULE = "График"
     OTHER = "Другое"
+
+class TaskPriority(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 class MessageSource(str, Enum):
     TELEGRAM = "telegram"
@@ -182,6 +188,20 @@ class Order:
     source_message_id: Optional[int] = None
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
+
+@dataclass
+class Task:
+    id: Optional[int] = None
+    title: str = ""
+    description: Optional[str] = None
+    due_date: date = field(default_factory=date.today)
+    due_time: Optional[str] = None
+    priority: TaskPriority = TaskPriority.MEDIUM
+    status: str = "pending"
+    contact_id: Optional[int] = None
+    assignee: Optional[str] = None
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
 ```
 
 ### 4. core/repositories.py — абстрактные репозитории
@@ -189,7 +209,7 @@ class Order:
 ```python
 from abc import ABC, abstractmethod
 from typing import Optional, List
-from .models import Contact, Product, Message, Order
+from .models import Contact, Product, Message, Order, Task
 
 class ContactRepo(ABC):
     @abstractmethod
@@ -238,6 +258,20 @@ class OrderRepo(ABC):
     def add(self, order: Order) -> Order: ...
     @abstractmethod
     def update(self, order: Order) -> Order: ...
+
+class TaskRepo(ABC):
+    @abstractmethod
+    def query(self) -> QueryBuilder: ...
+    @abstractmethod
+    def list(self, limit: int = 50, offset: int = 0, **filters) -> list[Task]: ...
+    @abstractmethod
+    def get_by_id(self, id: int) -> Optional[Task]: ...
+    @abstractmethod
+    def add(self, task: Task) -> Task: ...
+    @abstractmethod
+    def update(self, task: Task) -> Task: ...
+    @abstractmethod
+    def delete(self, id: int) -> bool: ...
 ```
 
 ### 5. core/exceptions.py
@@ -359,8 +393,8 @@ from pathlib import Path
 import tempfile
 import json
 
-from ai_mini_box.core.models import Contact, Product, Message
-from ai_mini_box.tests.mocks import MockContactRepo, MockProductRepo, MockMessageRepo
+from ai_mini_box.core.models import Contact, Product, Message, Task
+from ai_mini_box.tests.mocks import MockContactRepo, MockProductRepo, MockMessageRepo, MockTaskRepo
 
 @pytest.fixture
 def cli_runner():
@@ -389,14 +423,18 @@ def mock_product_repo():
 @pytest.fixture
 def mock_message_repo():
     return MockMessageRepo()
+
+@pytest.fixture
+def mock_task_repo():
+    return MockTaskRepo()
 ```
 
 ### 10. tests/mocks.py — mock-репозитории для unit-тестов
 
 ```python
 from typing import Optional
-from ai_mini_box.core.models import Contact, Product, Message
-from ai_mini_box.core.repositories import ContactRepo, ProductRepo, MessageRepo
+from ai_mini_box.core.models import Contact, Product, Message, Task
+from ai_mini_box.core.repositories import ContactRepo, ProductRepo, MessageRepo, TaskRepo
 
 class MockContactRepo(ContactRepo):
     def __init__(self):
@@ -479,6 +517,40 @@ class MockMessageRepo(MessageRepo):
         if topic:
             results = [m for m in results if m.topic and m.topic.value == topic]
         return results
+
+class MockTaskRepo(TaskRepo):
+    def __init__(self):
+        self._tasks: dict[int, Task] = {}
+        self._next_id = 1
+
+    def query(self):
+        from ai_mini_box.core.repositories import QueryBuilder
+        return QueryBuilder(list(self._tasks.values()))
+
+    def list(self, limit=50, offset=0, **filters):
+        items = list(self._tasks.values())
+        for key, value in filters.items():
+            if value is not None:
+                items = [t for t in items if getattr(t, key, None) == value]
+        items.sort(key=lambda t: (t.due_date, t.due_time or ""))
+        return items[offset:offset + limit]
+
+    def get_by_id(self, id: int) -> Optional[Task]:
+        return self._tasks.get(id)
+
+    def add(self, task: Task) -> Task:
+        task.id = self._next_id
+        self._tasks[self._next_id] = task
+        self._next_id += 1
+        return task
+
+    def update(self, task: Task) -> Task:
+        if task.id in self._tasks:
+            self._tasks[task.id] = task
+        return task
+
+    def delete(self, id: int) -> bool:
+        return self._tasks.pop(id, None) is not None
 ```
 
 ### 11. tests/test_registry.py — smoke-тест

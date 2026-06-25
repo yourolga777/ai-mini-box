@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Optional
 
@@ -64,7 +64,29 @@ class Message(BaseModel):
     topic: Optional[Topic] = None
     draft_response: Optional[str] = None
     sent_response: bool = False
+    extracted_phone: Optional[str] = None
+    extracted_name: Optional[str] = None
     received_at: datetime = Field(default_factory=datetime.now)
+
+
+class TaskPriority(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class Task(BaseModel):
+    id: Optional[int] = None
+    title: str = ""
+    description: Optional[str] = None
+    due_date: date = Field(default_factory=date.today)
+    due_time: Optional[str] = None
+    priority: TaskPriority = TaskPriority.MEDIUM
+    status: str = "pending"
+    contact_id: Optional[int] = None
+    assignee: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
 
 class Order(BaseModel):
@@ -74,5 +96,14 @@ class Order(BaseModel):
     total_kopecks: int = 0
     notes: Optional[str] = None
     source_message_id: Optional[int] = None
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class KnowledgeBaseItem(BaseModel):
+    id: Optional[int] = None
+    topic: Optional[Topic] = None
+    question_keywords: list[str] = Field(default_factory=list)
+    answer_text: str = ""
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)

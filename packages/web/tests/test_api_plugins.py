@@ -2,14 +2,14 @@ import pytest
 
 
 def test_list_plugins(client):
-    resp = client.get("/api/plugins/")
+    resp = client.get("/api/plugins")
     assert resp.status_code == 200
     plugins = resp.json()
     assert isinstance(plugins, list)
 
 
 def test_get_plugin_existing(client):
-    resp = client.get("/api/plugins/")
+    resp = client.get("/api/plugins")
     plugins = resp.json()
     if plugins:
         name = plugins[0]["name"]
