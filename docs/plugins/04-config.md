@@ -17,6 +17,17 @@ allowed_ids = config.telegram_allowed_chat_ids  # list[int]
 
 Sensitive fields (`telegram_token`, `email_password`, `whatsapp_api_key`, etc.) are automatically encrypted with Fernet (PBKDF2HMAC) when saved and decrypted on load. The encryption key is derived from `AI_BOX_SECRET` env var (or `"default-dev-secret"` fallback).
 
+### ⚠️ Two config APIs — use the right one
+
+- `JsonConfigManager().load()` → returns `AppConfig` with decrypted sensitive fields. Use this in daemons and API handlers.
+- `_manager.get_config()` (in `PluginManager`) → returns a dict with masked sensitive values (`"***"`). This is used by the web UI config endpoint to avoid leaking secrets to the frontend.
+
+**Do NOT use `_manager.get_config()` for your daemon** — the token will be `"***"` and API calls will fail.
+
+### Config changes require daemon restart
+
+Changing config via the web UI or CLI modifies the JSON file, but the running daemon has already loaded the old values into memory. You must **Stop** and **Start** the daemon for changes to apply.
+
 ## Environment variable overrides
 
 Any config field can be overridden via `AI_BOX_<FIELD_NAME>` env var:

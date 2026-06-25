@@ -107,12 +107,33 @@ def register(app: typer.Typer):
 ## watcher.py
 
 ```python
-from ai_mini_box.core.models import Product
+from ai_mini_box.core.models import Product, Message
 
 
 def find_low_stock(products: list[Product], threshold: int = 5) -> list[Product]:
     """Filter products whose stock is below threshold."""
     return [p for p in products if p.stock < threshold]
+
+
+def process_event(event: dict) -> Message | None:
+    """Handle multiple event types from an external API.
+
+    External APIs often deliver different event types in a single response
+    (e.g., Telegram's 'message', 'business_message', 'channel_post').
+    Use 'or' chaining to extract the payload regardless of type.
+
+    Always advance your cursor/offset for EVERY update — even skipped
+    types will otherwise be re-delivered forever.
+    """
+    payload = (
+        event.get("message")
+        or event.get("business_message")
+        or event.get("channel_post")
+    )
+    if payload is None:
+        return None  # skip unknown types
+    # ... convert payload to Message model ...
+    return Message(text=payload.get("text", ""))
 ```
 
 ## help/00-installation.md

@@ -105,6 +105,7 @@ def register(app: typer.Typer):
     @my_plugin.command()
     def daemon():
         """Run continuous polling loop until interrupted."""
+        # Load config fresh each cycle — see "Read config every cycle" below
         config = JsonConfigManager().load()
         # Validate required config
         if not config.telegram_token:
@@ -151,6 +152,19 @@ ai-mini-box my-plugin daemon
 - If the server restarts, it checks which PIDs are still alive and updates their status
 
 Write logs with `logger.info/error` — they appear in the web UI under the plugin's log viewer.
+
+### Read config every cycle
+
+Do NOT load config once at daemon startup — it will miss changes made via the web UI. Call `JsonConfigManager().load()` **inside the loop** (or at least check a reload signal):
+
+```python
+while not stop:
+    config = JsonConfigManager().load()  # fresh each cycle
+    # ... your polling logic ...
+    time.sleep(config.poll_interval)
+```
+
+This ensures config changes (token, allowed IDs, interval) take effect without a restart.
 
 ## Best practices
 

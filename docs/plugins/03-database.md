@@ -109,6 +109,27 @@ with get_db() as session:
     count = result.scalar()
 ```
 
+## Migrations: adding tables safely
+
+If your plugin needs new tables, add a migration file in `core/migrations/versions/`. **Always guard `create_table`** against already-existing tables — `Base.metadata.create_all()` at server startup creates them first:
+
+```python
+# migrations/versions/abc123_add_my_table.py
+import sqlalchemy as sa
+from alembic import op
+
+def upgrade():
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    if 'my_table' not in inspector.get_table_names():
+        op.create_table('my_table',
+            sa.Column('id', sa.Integer(), primary_key=True),
+            sa.Column('name', sa.String(), nullable=False),
+        )
+```
+
+Alternatively, if your plugin needs completely separate tables, use its own SQLite file rather than adding to core's migration chain.
+
 ## Entity models
 
 | Model | Key fields |

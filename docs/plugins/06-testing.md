@@ -102,9 +102,29 @@ def test_with_env_override(monkeypatch):
     assert config.telegram_token == "env_token"
 ```
 
-## Mocking external services
+## Fake class pattern (preferred for external services)
 
-Use `pytest-mock` to mock HTTP calls or other external dependencies:
+Instead of mocking individual HTTP calls, replace the **entire service class** with a test double. This is cleaner and avoids fragile `mocker.patch` chaining:
+
+```python
+class FakeBot:
+    def get_updates(self, offset=None):
+        return [
+            {"update_id": 1, "message": {"chat": {"id": 123}, "text": "Hello"}},
+        ]
+    def send_message(self, chat_id, text):
+        return True
+
+def test_poll(monkeypatch):
+    monkeypatch.setattr("my_plugin.bot.TelegramBot", lambda token: FakeBot())
+    # ... test poll logic with FakeBot
+```
+
+Benefits: one place to mock, works for all methods, no fragile HTTP-level patching.
+
+## Mocking external services (fallback)
+
+Use `pytest-mock` when a fake class is impractical:
 
 ```python
 def test_bot_get_updates(mocker):
