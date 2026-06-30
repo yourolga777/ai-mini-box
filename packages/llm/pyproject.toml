@@ -19,12 +19,14 @@ classifiers = [
 ]
 dependencies = [
     "ai-mini-box-core>=5.0.0",
+    "scikit-learn>=1.3",
+    "onnxruntime>=1.15",
+    "faiss-cpu>=1.7",
+    "apscheduler>=3.10",
 ]
 
 [project.optional-dependencies]
-local = ["llama-cpp-python>=0.2"]
 remote = ["openai>=1.0"]
-download = ["huggingface-hub>=0.20"]
 dev = ["pytest>=8"]
 
 [project.urls]
@@ -36,6 +38,9 @@ llm = "ai_mini_box_llm.plugin:register"
 
 [project.entry-points."ai_mini_box.help"]
 llm = "ai_mini_box_llm"
+
+[project.entry-points."ai_mini_box.config_provider"]
+llm = "ai_mini_box_llm.plugin:config_provider"
 
 [tool.hatch.build]
 include = ["ai_mini_box_llm/**"]

@@ -20,23 +20,23 @@ export default function Products() {
 
   const cols = [
     { key: "id", label: "#" },
-    { key: "name", label: "Name" },
-    { key: "price_kopecks", label: "Price (k)" },
-    { key: "stock", label: "Stock" },
+    { key: "name", label: "Название" },
+    { key: "price_kopecks", label: "Цена (к)" },
+    { key: "stock", label: "Остаток" },
   ];
 
   return (
     <div>
-      <h1 className="text-xl font-bold mb-4">Products</h1>
+      <h1 className="text-xl font-bold mb-4">Товары</h1>
       <div className="flex gap-2 mb-4">
-        <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)}
+        <input placeholder="Название" value={name} onChange={(e) => setName(e.target.value)}
           className="border rounded px-2 py-1 text-sm" />
         <button onClick={() => create.mutate({ name })}
           className="bg-blue-600 text-white px-3 py-1 rounded text-sm">
-          Add
+          Добавить
         </button>
       </div>
-      {isLoading ? <p>Loading…</p> : <Table cols={cols} data={data ?? []} onDelete={(r) => del.mutate(r.id as number)} />}
+      {isLoading ? <p>Загрузка…</p> : <Table cols={cols} data={data ?? []} onDelete={(r) => del.mutate(r.id as number)} />}
     </div>
   );
 }

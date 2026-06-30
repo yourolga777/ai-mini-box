@@ -1,7 +1,9 @@
 import { useState, startTransition } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { api } from "../api/client";
+import { api, type Folder } from "../api/client";
+import FolderModal from "../components/FolderModal";
+import PluginConfigForm from "../components/PluginConfigForm";
 
 export default function PluginDetail() {
   const { name } = useParams<{ name: string }>();
@@ -33,6 +35,22 @@ export default function PluginDetail() {
   const botUsername: string = (config as any)?.telegram_bot_username ?? "";
   const botName: string = (config as any)?.telegram_bot_name ?? "";
   const allowedChatIds: number[] = (config as any)?.telegram_allowed_chat_ids ?? [];
+
+  const [showConfigModal, setShowConfigModal] = useState(false);
+
+  const { data: configSchema } = useQuery({
+    queryKey: ["plugin-config-schema", name],
+    queryFn: () => api.getPluginConfigSchema(name!),
+    enabled: !!name,
+    retry: false,
+  });
+  const { data: pluginConfig } = useQuery({
+    queryKey: ["plugin-config", name],
+    queryFn: () => api.getPluginConfig(name!),
+    enabled: !!name && !!configSchema,
+    retry: false,
+  });
+  const hasConfigSchema = !!configSchema;
 
   const { data: logs } = useQuery({
     queryKey: ["plugin-logs", name],
@@ -134,8 +152,8 @@ export default function PluginDetail() {
         await api.stopPlugin(name!);
         startTransition(() => {
           qc.invalidateQueries({ queryKey: ["plugin", name] });
-          setActionResult("Daemon stopped");
-          setActionBusy("");
+      setActionResult("Демон остановлен");
+      setActionBusy("");
         });
       } catch (e: any) {
         startTransition(() => {
@@ -149,7 +167,7 @@ export default function PluginDetail() {
         await api.startPlugin(name!);
         startTransition(() => {
           qc.invalidateQueries({ queryKey: ["plugin", name] });
-          setActionResult("Daemon started");
+          setActionResult("Демон запущен");
           setActionBusy("");
         });
       } catch (e: any) {
@@ -161,42 +179,53 @@ export default function PluginDetail() {
     }
   };
 
-  if (isLoading) return <p>Loading…</p>;
-  if (!plugin) return <p>Plugin not found.</p>;
+  if (isLoading) return <p>Загрузка…</p>;
+  if (!plugin) return <p>Плагин не найден.</p>;
 
   const isTelegram = plugin.name === "telegram";
+  const isLlm = plugin.name === "llm";
 
   return (
     <div key={"app-plugin-" + name}>
       <Link to="/plugins" className="text-blue-600 text-sm">
-        &larr; Back to plugins
+        &larr; Назад к плагинам
       </Link>
       <div className="flex items-center justify-between mt-2 mb-4">
         <h1 className="text-xl font-bold">{plugin.name}</h1>
         <div className="flex gap-2">
           {!confirmUninstall ? (
-            <button
-              className="text-red-600 border border-red-300 px-3 py-1.5 rounded text-sm hover:bg-red-50 disabled:opacity-50"
-              onClick={() => setConfirmUninstall(true)}
-              disabled={uninstalling}
-            >
-              Uninstall
-            </button>
+            <>
+              {hasConfigSchema && !isTelegram && !isLlm && (
+                <button
+                  className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-700"
+                  onClick={() => setShowConfigModal(true)}
+                >
+                  Настроить
+                </button>
+              )}
+              <button
+                className="text-red-600 border border-red-300 px-3 py-1.5 rounded text-sm hover:bg-red-50 disabled:opacity-50"
+                onClick={() => setConfirmUninstall(true)}
+                disabled={uninstalling}
+              >
+                Удалить
+              </button>
+            </>
           ) : (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-red-600">Are you sure?</span>
+              <span className="text-sm text-red-600">Вы уверены?</span>
               <button
                 className="bg-red-600 text-white px-3 py-1.5 rounded text-sm hover:bg-red-700 disabled:opacity-50"
                 onClick={doUninstall}
                 disabled={uninstalling}
               >
-                {uninstalling ? "Uninstalling..." : "Yes, uninstall"}
+                {uninstalling ? "Удаление..." : "Да, удалить"}
               </button>
               <button
                 className="text-gray-500 px-3 py-1.5 rounded text-sm hover:bg-gray-100"
                 onClick={() => setConfirmUninstall(false)}
               >
-                Cancel
+                Отмена
               </button>
             </div>
           )}
@@ -206,7 +235,7 @@ export default function PluginDetail() {
       {/* Token setup — only for telegram */}
       {isTelegram && !hasToken && (
         <div className="bg-white rounded shadow p-4 mb-4 border border-blue-200">
-          <h2 className="font-bold mb-3">Telegram Bot Setup</h2>
+          <h2 className="font-bold mb-3">Настройка Telegram бота</h2>
 
           <div className="flex gap-4 mb-4">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -216,7 +245,7 @@ export default function PluginDetail() {
                 checked={tokenSource === "existing"}
                 onChange={() => setTokenSource("existing")}
               />
-              I already have a token
+              У меня уже есть токен
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input
@@ -225,18 +254,18 @@ export default function PluginDetail() {
                 checked={tokenSource === "new"}
                 onChange={() => setTokenSource("new")}
               />
-              Create a new bot
+              Создать нового бота
             </label>
           </div>
 
           {tokenSource === "existing" ? (
             <div className="space-y-3">
               <div className="text-sm text-gray-600 space-y-1">
-                <p>1. Open <a href="https://t.me/BotFather" target="_blank" className="text-blue-600 underline">@BotFather</a> in Telegram</p>
-                <p>2. Send <code className="bg-gray-100 px-1 rounded">/mybots</code></p>
-                <p>3. Select your bot from the list</p>
-                <p>4. Tap <strong>API Token</strong> button</p>
-                <p>5. Copy the token and paste below</p>
+                <p>1. Откройте <a href="https://t.me/BotFather" target="_blank" className="text-blue-600 underline">@BotFather</a> в Telegram</p>
+                <p>2. Отправьте <code className="bg-gray-100 px-1 rounded">/mybots</code></p>
+                <p>3. Выберите бота из списка</p>
+                <p>4. Нажмите кнопку <strong>API Token</strong></p>
+                <p>5. Скопируйте токен и вставьте ниже</p>
               </div>
               <input
                 className="w-full border rounded px-3 py-2 text-sm font-mono"
@@ -248,13 +277,13 @@ export default function PluginDetail() {
             </div>
           ) : (
             <div className="text-sm text-gray-600 space-y-1 mb-3">
-              <p>1. Open <a href="https://t.me/BotFather" target="_blank" className="text-blue-600 underline">@BotFather</a> in Telegram</p>
-              <p>2. Send <code className="bg-gray-100 px-1 rounded">/newbot</code></p>
-              <p>3. Choose a name and username</p>
-              <p>4. Copy the token and paste below</p>
+              <p>1. Откройте <a href="https://t.me/BotFather" target="_blank" className="text-blue-600 underline">@BotFather</a> в Telegram</p>
+              <p>2. Отправьте <code className="bg-gray-100 px-1 rounded">/newbot</code></p>
+              <p>3. Выберите имя и username</p>
+              <p>4. Скопируйте токен и вставьте ниже</p>
               <input
                 className="w-full border rounded px-3 py-2 text-sm font-mono mt-2"
-                placeholder="Paste your token here"
+                placeholder="Вставьте токен сюда"
                 value={tokenInput}
                 onChange={(e) => setTokenInput(e.target.value)}
                 disabled={setupBusy}
@@ -271,7 +300,7 @@ export default function PluginDetail() {
             disabled={!tokenInput.trim() || setupBusy}
             onClick={saveToken}
           >
-            {setupBusy ? "Saving..." : "Save Token"}
+            {setupBusy ? "Сохранение..." : "Сохранить токен"}
           </button>
         </div>
       )}
@@ -282,7 +311,7 @@ export default function PluginDetail() {
           <div className="flex items-center gap-3">
             <span className="w-3 h-3 bg-green-500 rounded-full" />
             <div>
-              <span className="font-bold text-green-700">Bot connected</span>
+              <span className="font-bold text-green-700">Бот подключён</span>
               {botUsername && (
                 <span className="text-green-600 ml-2">as @{botUsername}</span>
               )}
@@ -299,27 +328,27 @@ export default function PluginDetail() {
                 } catch (_) {}
               }}
             >
-              Re-verify
+              Перепроверить
             </button>
           </div>
 
           {/* Guideline steps */}
           <div className="mt-4 bg-blue-50 border border-blue-100 rounded p-3 text-sm text-gray-700 space-y-2">
-            <p className="font-semibold text-blue-800">Next steps</p>
+            <p className="font-semibold text-blue-800">Что дальше</p>
             <ol className="list-decimal list-inside space-y-1">
               <li>
-                Send a message to the bot {botUsername ? (
+                Отправьте сообщение боту {botUsername ? (
                   <a href={`https://t.me/${botUsername}`} target="_blank" className="text-blue-600 underline font-mono">@{botUsername}</a>
-                ) : "username"} in Telegram, or to the phone number linked via Telegram Business
+                ) : "username"} в Telegram, или на номер, привязанный через Telegram Business
               </li>
               <li>
-                Press <strong>Poll now</strong> below — the bot will find your chat
+                Нажмите <strong>Опрос</strong> ниже — бот найдёт ваш чат
               </li>
               <li>
-                A detected chat ID will appear — click <strong>Add to allowed</strong>
+                Появится ID обнаруженного чата — нажмите <strong>Добавить</strong>
               </li>
               <li>
-                Press <strong>Start daemon</strong> — the bot will receive messages automatically
+                Нажмите <strong>Запустить демон</strong> — бот будет получать сообщения автоматически
               </li>
             </ol>
           </div>
@@ -330,20 +359,20 @@ export default function PluginDetail() {
       <div className="bg-white rounded shadow p-4 mb-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <div className="text-sm text-gray-500">Module</div>
+            <div className="text-sm text-gray-500">Модуль</div>
             <div className="font-mono text-sm">{plugin.module}</div>
           </div>
           <div>
-            <div className="text-sm text-gray-500">Status</div>
+            <div className="text-sm text-gray-500">Статус</div>
             <div className="flex items-center gap-2 mt-1">
               <span
                 className={`w-2 h-2 rounded-full ${plugin.status === "running" || (isTelegram && hasToken) ? "bg-green-500" : "bg-gray-400"}`}
               />
               <span>
                 {plugin.status === "running"
-                  ? "running"
+                  ? "запущен"
                   : isTelegram && hasToken
-                    ? "configured"
+                    ? "настроен"
                     : plugin.status}
               </span>
               {plugin.pid && <span className="text-xs text-gray-400">(PID {plugin.pid})</span>}
@@ -355,7 +384,7 @@ export default function PluginDetail() {
       {/* Actions — only for telegram with token */}
       {isTelegram && (
         <div className="bg-white rounded shadow p-4 mb-4">
-          <h2 className="font-bold mb-3">Actions</h2>
+          <h2 className="font-bold mb-3">Действия</h2>
 
           <div className="flex flex-wrap gap-3">
             <button
@@ -368,14 +397,14 @@ export default function PluginDetail() {
               ) : (
                 "📩"
               )}
-              {actionBusy === "poll" ? "Polling..." : "Poll now"}
+              {actionBusy === "poll" ? "Опрос..." : "Опрос"}
             </button>
 
             <button
               className="bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded text-sm hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
               onClick={() => navigate("/messages")}
             >
-              📋 View Messages
+              📋 Сообщения
             </button>
 
             <button
@@ -395,7 +424,7 @@ export default function PluginDetail() {
               ) : (
                 "▶"
               )}
-              {plugin.status === "running" ? "Stop daemon" : "Start daemon"}
+              {plugin.status === "running" ? "Остановить демон" : "Запустить демон"}
             </button>
           </div>
 
@@ -404,7 +433,7 @@ export default function PluginDetail() {
               <div>{actionResult}</div>
               {detectedChatIds.length > 0 && (
                 <div className="mt-3 border-t border-gray-200 pt-2">
-                  <p className="text-xs text-gray-500 mb-2 font-semibold">Detected chats</p>
+                  <p className="text-xs text-gray-500 mb-2 font-semibold">Обнаруженные чаты</p>
                   {detectedChatIds.map((cid) => {
                     const alreadyAllowed = allowedChatIds.includes(cid);
                     return (
@@ -412,7 +441,7 @@ export default function PluginDetail() {
                         <div>
                           <span className="font-mono text-xs font-bold">{cid}</span>
                           <span className="text-xs text-gray-500 ml-2">
-                            {alreadyAllowed ? "(already allowed)" : "new"}
+                            {alreadyAllowed ? "(уже разрешён)" : "новый"}
                           </span>
                         </div>
                         <button
@@ -420,7 +449,7 @@ export default function PluginDetail() {
                           onClick={() => !alreadyAllowed && addDetectedChatId(cid)}
                           disabled={alreadyAllowed}
                         >
-                          {alreadyAllowed ? "Added" : "Add to allowed"}
+                          {alreadyAllowed ? "Добавлен" : "Добавить"}
                         </button>
                       </div>
                     );
@@ -435,7 +464,7 @@ export default function PluginDetail() {
       {/* Allowed Chats — only for telegram with token */}
       {isTelegram && hasToken && (
         <div className="bg-white rounded shadow p-4 mb-4">
-          <h2 className="font-bold mb-3">Allowed Chats</h2>
+          <h2 className="font-bold mb-3">Разрешённые чаты</h2>
 
           {allowedChatIds.length > 0 ? (
             <div className="flex flex-wrap gap-2 mb-3">
@@ -456,14 +485,14 @@ export default function PluginDetail() {
             </div>
           ) : (
             <p className="text-sm text-gray-500 mb-3">
-              No chats allowed. Messages from all chats will be accepted.
+              Нет разрешённых чатов. Сообщения из всех чатов будут приняты.
             </p>
           )}
 
           <div className="flex gap-2">
             <input
               className="border rounded px-3 py-1.5 text-sm font-mono flex-1"
-              placeholder="Enter chat ID"
+              placeholder="ID чата"
               value={newChatId}
               onChange={(e) => setNewChatId(e.target.value)}
             />
@@ -472,23 +501,187 @@ export default function PluginDetail() {
               disabled={!newChatId.trim() || isNaN(Number(newChatId))}
               onClick={addChatId}
             >
-              Add
+              Добавить
             </button>
           </div>
 
           <p className="text-xs text-gray-400 mt-2">
-            Leave empty to allow all chats. Add specific IDs to restrict.
+            Оставьте пустым для всех чатов. Укажите ID для ограничения.
           </p>
+        </div>
+      )}
+
+      {/* Extra config — Telegram */}
+      {isTelegram && configSchema && (
+        <div className="bg-white rounded shadow p-4 mb-4">
+          <h2 className="font-bold mb-3">Доп. настройки Telegram</h2>
+          <PluginConfigForm
+            pluginName={name!}
+            schema={configSchema}
+            initialValues={pluginConfig ?? {}}
+            onSaved={() => qc.invalidateQueries({ queryKey: ["plugin-config", name] })}
+          />
+        </div>
+      )}
+
+      {/* Folder management — only for llm */}
+      {isLlm && <FolderSection />}
+
+      {/* LLM config */}
+      {isLlm && configSchema && (
+        <div className="bg-white rounded shadow p-4 mb-4">
+          <h2 className="font-bold mb-3">Настройки LLM</h2>
+          <PluginConfigForm
+            pluginName={name!}
+            schema={configSchema}
+            initialValues={pluginConfig ?? {}}
+            onSaved={() => qc.invalidateQueries({ queryKey: ["plugin-config", name] })}
+          />
         </div>
       )}
 
       {/* Logs */}
       <div className="bg-white rounded shadow p-4">
-        <h2 className="font-bold mb-2">Logs</h2>
+        <h2 className="font-bold mb-2">Логи</h2>
         <pre className="bg-gray-900 text-green-300 text-xs p-3 rounded max-h-64 overflow-auto">
-          {((logs?.lines as string[]) ?? []).join("\n") || "(no logs)"}
+          {((logs?.lines as string[]) ?? []).join("\n") || "(нет логов)"}
         </pre>
       </div>
+
+      {/* Config modal for non-Telegram/non-LLM plugins */}
+      {showConfigModal && configSchema && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowConfigModal(false)}>
+          <div className="bg-white rounded shadow-lg p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold">Настройки {name}</h2>
+              <button className="text-gray-400 hover:text-gray-600 text-lg" onClick={() => setShowConfigModal(false)}>&times;</button>
+            </div>
+            <PluginConfigForm
+              pluginName={name!}
+              schema={configSchema}
+              initialValues={pluginConfig ?? {}}
+              onSaved={() => {
+                qc.invalidateQueries({ queryKey: ["plugin-config", name] });
+                setShowConfigModal(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FolderSection() {
+  const qc = useQueryClient();
+  const [showModal, setShowModal] = useState(false);
+  const [editFolder, setEditFolder] = useState<Folder | null>(null);
+  const [resultMsg, setResultMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  const { data: folders, isLoading } = useQuery({
+    queryKey: ["folders"],
+    queryFn: async () => {
+      try { return await api.listFolders(); }
+      catch { return []; }
+    },
+  });
+
+  const saveMut = useMutation({
+    mutationFn: (data: { name: string; description: string; color: string }) =>
+      editFolder
+        ? api.updateFolder(editFolder.id, data)
+        : api.createFolder(data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["folders"] }); setShowModal(false); setEditFolder(null); },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: ({ id, mode }: { id: number; mode: "move" | "delete_messages" }) =>
+      api.deleteFolder(id, mode),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["folders"] }); setShowModal(false); setEditFolder(null); },
+  });
+
+  const assignAllMut = useMutation({
+    mutationFn: (limit: number) => api.assignAllCategories(limit),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["folders"] });
+      qc.invalidateQueries({ queryKey: ["messages"] });
+      setResultMsg({ text: `✅ Обработано: ${data.checked}, назначено: ${data.assigned}`, ok: true });
+    },
+    onError: (err: any) => {
+      const detail = err?.message ?? "";
+      if (detail.includes("AutoProcessor")) {
+        setResultMsg({ text: "❌ ИИ-плагин не запущен", ok: false });
+      } else {
+        setResultMsg({ text: "❌ Ошибка при распределении", ok: false });
+      }
+    },
+  });
+
+  return (
+    <div className="bg-white rounded shadow p-4 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-bold">Папки</h2>
+        <div className="flex items-center gap-2">
+          <button
+            className="bg-purple-600 text-white px-3 py-1 rounded text-sm hover:bg-purple-700 disabled:opacity-50"
+            onClick={() => assignAllMut.mutate(50)}
+            disabled={assignAllMut.isPending}
+          >
+            {assignAllMut.isPending ? "Распределяю…" : "Распределить всё"}
+          </button>
+          <button
+            className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+            onClick={() => { setEditFolder(null); setShowModal(true); }}
+          >
+            + Создать
+          </button>
+        </div>
+      </div>
+      {resultMsg && (
+        <p className={`mb-3 text-sm ${resultMsg.ok ? "text-green-600" : "text-red-600"}`}>
+          {resultMsg.text}
+        </p>
+      )}
+
+      {isLoading ? (
+        <p className="text-sm text-gray-400">Загрузка...</p>
+      ) : folders && folders.length > 0 ? (
+        <div className="space-y-1">
+          {folders.map((f: Folder) => (
+            <div key={f.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded text-sm">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: f.color }} />
+                <span className="font-medium truncate">{f.name}</span>
+                {f.is_system && <span className="text-xs text-gray-400">(сист.)</span>}
+                <span className="text-xs text-gray-400">{f.message_count} сообщ.</span>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                {!f.is_system && (
+                  <button
+                    className="text-xs text-blue-600 hover:text-blue-800 px-1"
+                    onClick={() => { setEditFolder(f); setShowModal(true); }}
+                  >
+                    Ред.
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-gray-500">Нет папок. Нажмите «+ Создать».</p>
+      )}
+
+      {showModal && (
+        <FolderModal
+          folder={editFolder}
+          onSave={(data) => saveMut.mutate(data)}
+          onClose={() => { setShowModal(false); setEditFolder(null); }}
+          saving={saveMut.isPending}
+          onDelete={(id, mode) => deleteMut.mutate({ id, mode })}
+          deleting={deleteMut.isPending}
+        />
+      )}
     </div>
   );
 }

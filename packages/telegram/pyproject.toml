@@ -19,6 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "ai-mini-box-core>=5.0.0",
+    "ai-mini-box-llm>=0.1.0",
     "requests>=2.31",
 ]
 
@@ -31,6 +32,9 @@ Repository = "https://github.com/Kibertum/ai-mini-box"
 
 [project.entry-points."ai_mini_box.tools"]
 telegram = "ai_mini_box_telegram.commands:register"
+
+[project.entry-points."ai_mini_box.config_provider"]
+telegram = "ai_mini_box_telegram.config_provider:config_provider"
 
 [project.entry-points."ai_mini_box.help"]
 telegram = "ai_mini_box_telegram"

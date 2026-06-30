@@ -1,6 +1,7 @@
+import json
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
-import json
 
 
 class TelegramStateRepo(ABC):
@@ -33,10 +34,15 @@ class FileTelegramStateRepo(TelegramStateRepo):
             return None
         try:
             data = json.loads(self._path.read_text(encoding="utf-8"))
-            return data.get("offset")
-        except (json.JSONDecodeError, KeyError, ValueError):
+            value = data.get("offset")
+            if not isinstance(value, int):
+                return None
+            return value
+        except (json.JSONDecodeError, KeyError, ValueError, TypeError):
             return None
 
     def save_offset(self, offset: int) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps({"offset": offset}), encoding="utf-8")
+        tmp = self._path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"offset": offset}), encoding="utf-8")
+        os.replace(tmp, self._path)

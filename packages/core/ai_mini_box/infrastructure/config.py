@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Any, Optional
 
@@ -74,6 +75,7 @@ class JsonConfigManager:
     def __init__(self, path: str | Path = "data/config.json"):
         self.path = Path(path)
         self._fernet: Optional[Fernet] = None
+        self._lock = threading.Lock()
 
     def _get_fernet(self) -> Fernet:
         if self._fernet is None:
@@ -94,10 +96,14 @@ class JsonConfigManager:
         try:
             return self._get_fernet().decrypt(value.encode()).decode()
         except Exception:
-            return value
+            from loguru import logger as _log
+
+            _log.error("Failed to decrypt config value, resetting to empty")
+            return ""
 
     def load(self) -> AppConfig:
         config = AppConfig()
+        self._unknown_keys = {}
         if self.path.exists():
             with open(self.path, encoding="utf-8") as f:
                 data = json.load(f)
@@ -106,6 +112,8 @@ class JsonConfigManager:
                     if key in SENSITIVE_FIELDS and isinstance(value, str):
                         value = self._decrypt(value)
                     setattr(config, key, value)
+                else:
+                    self._unknown_keys[key] = value
         self._apply_env_overrides(config)
         return config
 
@@ -125,11 +133,16 @@ class JsonConfigManager:
     def save(self, config: AppConfig):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         data = config.model_dump()
+        for k, v in getattr(self, '_unknown_keys', {}).items():
+            if k not in data:
+                data[k] = v
         for key in SENSITIVE_FIELDS:
             if key in data and data[key]:
                 data[key] = self._encrypt(data[key])
-        with open(self.path, "w", encoding="utf-8") as f:
+        tmp = self.path.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+        os.replace(tmp, self.path)
 
     def set(self, key: str, value: Any) -> bool:
         if key not in AppConfig.model_fields:
@@ -153,32 +166,31 @@ class JsonConfigManager:
                 value = json.loads(value) if value.startswith("[") else [int(x.strip()) for x in value.split(",") if x.strip()]
             value = [int(x) for x in value]
 
-        current = self.load()
-        raw = current.model_dump()
-        raw[key] = value
-        try:
-            new_config = AppConfig(**raw)
-        except ValidationError as e:
-            raise ValueError(f"Invalid value for '{key}': {e.errors()[0]['msg']}")
-
-        self.save(new_config)
+        with self._lock:
+            current = self.load()
+            raw = current.model_dump()
+            raw[key] = value
+            try:
+                new_config = AppConfig(**raw)
+            except ValidationError as e:
+                raise ValueError(f"Invalid value for '{key}': {e.errors()[0]['msg']}")
+            self.save(new_config)
         return True
 
     def unset(self, key: str) -> bool:
         if key not in AppConfig.model_fields:
             raise ValueError(f"Unknown config key: {key}")
 
-        if not self.path.exists():
-            return False
+        with self._lock:
+            if not self.path.exists():
+                return False
 
-        with open(self.path, encoding="utf-8") as f:
-            data = json.load(f)
+            current = self.load()
+            raw = current.model_dump()
+            if key not in raw:
+                return False
 
-        if key not in data:
-            return False
-
-        del data[key]
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+            default = getattr(AppConfig(), key)
+            raw[key] = default
+            self.save(AppConfig(**raw))
         return True

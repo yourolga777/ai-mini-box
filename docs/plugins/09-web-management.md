@@ -34,8 +34,9 @@ Only `.whl` files are accepted. The package name must match `^ai[-_]mini[-_]box[
 ## API endpoints
 
 | Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/plugins` | List all plugins |
+|---|---|---|---|
+| `GET` | `/api/plugins` | List all installed plugins |
+| `GET` | `/api/plugins/catalog` | List all available plugins (installed + from catalog) |
 | `GET` | `/api/plugins/{name}` | Get plugin details (status, PID) |
 | `GET` | `/api/plugins/{name}/logs` | Get recent log lines |
 | `POST` | `/api/plugins/install` | Install from PyPI |

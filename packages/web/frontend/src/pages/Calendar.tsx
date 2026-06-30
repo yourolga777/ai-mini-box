@@ -23,11 +23,17 @@ const MONTHS = [
 
 const DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
-const PRIORITY_COLORS: Record<string, string> = {
-  high: "bg-red-500",
-  medium: "bg-yellow-500",
-  low: "bg-green-500",
-};
+  const PRIORITY_LABELS: Record<string, string> = {
+    high: "Высокий",
+    medium: "Средний",
+    low: "Низкий",
+  };
+
+  const PRIORITY_COLORS: Record<string, string> = {
+    high: "bg-red-500",
+    medium: "bg-yellow-500",
+    low: "bg-green-500",
+  };
 
 function formatDate(d: Date): string {
   const y = d.getFullYear();
@@ -67,6 +73,12 @@ export default function Calendar() {
   const [newTitle, setNewTitle] = useState("");
   const [newTime, setNewTime] = useState("");
   const [newPriority, setNewPriority] = useState<"low" | "medium" | "high">("medium");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [modalTitle, setModalTitle] = useState("");
+  const [modalDate, setModalDate] = useState(formatDate(new Date()));
+  const [modalTime, setModalTime] = useState("");
+  const [modalPriority, setModalPriority] = useState<"low" | "medium" | "high">("medium");
+  const [monthPopupDay, setMonthPopupDay] = useState<string | null>(null);
 
   const monthStr = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
 
@@ -136,6 +148,20 @@ export default function Calendar() {
     setShowPopup(null);
   }
 
+  function handleCreateFromModal() {
+    if (!modalTitle.trim()) return;
+    createTask.mutate({
+      title: modalTitle.trim(),
+      due_date: modalDate,
+      due_time: modalTime || null,
+      priority: modalPriority,
+    });
+    setShowCreateModal(false);
+    setModalTitle("");
+    setModalTime("");
+    setModalPriority("medium");
+  }
+
   function handleToggleTask(task: TaskItem) {
     updateTask.mutate({
       id: task.id,
@@ -148,16 +174,19 @@ export default function Calendar() {
     const dateStr = formatDate(cursor);
     const dayTasks = tasksByDate[dateStr] || [];
     return (
-      <CalendarShell view={view} onView={setView} cursor={cursor} onNav={nav} onToday={navToday}>
-        <div className="text-lg font-semibold mb-4">{cursor.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</div>
-        <div className="space-y-2">
-          {dayTasks.length === 0 && <p className="text-gray-400 text-sm">Нет задач</p>}
-          {dayTasks.map((t) => (
-            <TaskCard key={t.id} task={t} onToggle={handleToggleTask} onDelete={(id) => deleteTask.mutate(id)} />
-          ))}
-        </div>
-        <QuickAdd dateStr={dateStr} onAdd={handleAddTask} title={newTitle} onTitle={setNewTitle} time={newTime} onTime={setNewTime} priority={newPriority} onPriority={setNewPriority} />
-      </CalendarShell>
+      <>
+        <CalendarShell view={view} onView={setView} cursor={cursor} onNav={nav} onToday={navToday} onAddTask={() => { setShowCreateModal(true); }}>
+          <div className="text-lg font-semibold mb-4">{cursor.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</div>
+          <div className="space-y-2">
+            {dayTasks.length === 0 && <p className="text-gray-400 text-sm">Нет задач</p>}
+            {dayTasks.map((t) => (
+              <TaskCard key={t.id} task={t} onToggle={handleToggleTask} onDelete={(id) => deleteTask.mutate(id)} />
+            ))}
+          </div>
+          <QuickAdd dateStr={dateStr} onAdd={handleAddTask} title={newTitle} onTitle={setNewTitle} time={newTime} onTime={setNewTime} priority={newPriority} onPriority={setNewPriority} />
+        </CalendarShell>
+        <NewTaskModal show={showCreateModal} title={modalTitle} onTitle={setModalTitle} date={modalDate} onDate={setModalDate} time={modalTime} onTime={setModalTime} priority={modalPriority} onPriority={setModalPriority} onCreate={handleCreateFromModal} onClose={() => setShowCreateModal(false)} busy={createTask.isPending} />
+      </>
     );
   }
 
@@ -166,31 +195,34 @@ export default function Calendar() {
     const start = startOfWeek(cursor);
     const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
     return (
-      <CalendarShell view={view} onView={setView} cursor={cursor} onNav={nav} onToday={navToday}>
-        <div className="grid grid-cols-7 gap-2">
-          {days.map((d) => {
-            const ds = formatDate(d);
-            const dayTasks = tasksByDate[ds] || [];
-            const isToday = ds === today;
-            return (
-              <div key={ds} className={`border rounded p-2 min-h-[120px] ${isToday ? "border-blue-500 bg-blue-50" : "border-gray-200"}`}>
-                <div className="text-sm font-semibold mb-1 text-center">{d.getDate()} {MONTHS[d.getMonth()].slice(0, 3)}</div>
-                {dayTasks.map((t) => (
-                  <div key={t.id} className={`text-xs p-1 mb-1 rounded cursor-pointer ${t.status === "completed" ? "line-through opacity-50" : ""} ${PRIORITY_COLORS[t.priority]} text-white`}
-                    onClick={() => handleToggleTask(t)}>
-                    {t.due_time && <span className="font-mono">{t.due_time} </span>}
-                    {t.title}
-                  </div>
-                ))}
-                <button className="text-xs text-blue-500 mt-1" onClick={() => { setShowPopup(ds); setNewTitle(""); setNewTime(""); }}>+</button>
-                {showPopup === ds && (
-                  <QuickAdd dateStr={ds} onAdd={handleAddTask} title={newTitle} onTitle={setNewTitle} time={newTime} onTime={setNewTime} priority={newPriority} onPriority={setNewPriority} />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </CalendarShell>
+      <>
+        <CalendarShell view={view} onView={setView} cursor={cursor} onNav={nav} onToday={navToday} onAddTask={() => { setModalDate(formatDate(cursor)); setShowCreateModal(true); }}>
+          <div className="grid grid-cols-7 gap-2">
+            {days.map((d) => {
+              const ds = formatDate(d);
+              const dayTasks = tasksByDate[ds] || [];
+              const isToday = ds === today;
+              return (
+                <div key={ds} className={`border rounded p-2 min-h-[120px] ${isToday ? "border-blue-500 bg-blue-50" : "border-gray-200"}`}>
+                  <div className="text-sm font-semibold mb-1 text-center">{d.getDate()} {MONTHS[d.getMonth()].slice(0, 3)}</div>
+                  {dayTasks.map((t) => (
+                    <div key={t.id} className={`text-xs p-1 mb-1 rounded cursor-pointer ${t.status === "completed" ? "line-through opacity-50" : ""} ${PRIORITY_COLORS[t.priority]} text-white`}
+                      onClick={() => handleToggleTask(t)}>
+                      {t.due_time && <span className="font-mono">{t.due_time} </span>}
+                      {t.title}
+                    </div>
+                  ))}
+                  <button className="text-xs text-blue-500 mt-1" onClick={() => { setShowPopup(ds); setNewTitle(""); setNewTime(""); }}>+</button>
+                  {showPopup === ds && (
+                    <QuickAdd dateStr={ds} onAdd={handleAddTask} title={newTitle} onTitle={setNewTitle} time={newTime} onTime={setNewTime} priority={newPriority} onPriority={setNewPriority} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </CalendarShell>
+        <NewTaskModal show={showCreateModal} title={modalTitle} onTitle={setModalTitle} date={modalDate} onDate={setModalDate} time={modalTime} onTime={setModalTime} priority={modalPriority} onPriority={setModalPriority} onCreate={handleCreateFromModal} onClose={() => setShowCreateModal(false)} busy={createTask.isPending} />
+      </>
     );
   }
 
@@ -203,33 +235,71 @@ export default function Calendar() {
     const cells: (number | null)[] = Array(sdow).fill(null);
     for (let d = 1; d <= dim; d++) cells.push(d);
     while (cells.length % 7 !== 0) cells.push(null);
+    const popupTasks = monthPopupDay ? tasksByDate[monthPopupDay] || [] : [];
     return (
-      <CalendarShell view={view} onView={setView} cursor={cursor} onNav={nav} onToday={navToday}>
-        <div className="grid grid-cols-7 text-center text-sm font-semibold text-gray-500 mb-1">
-          {DAYS.map((d) => (<div key={d} className="py-1">{d}</div>))}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {cells.map((day, i) => {
-            if (day === null) return <div key={`e-${i}`} />;
-            const ds = formatDate(new Date(y, m, day));
-            const dayTasks = tasksByDate[ds] || [];
-            const isToday = ds === today;
-            return (
-              <div key={ds}
-                className={`border rounded p-1 min-h-[80px] cursor-pointer hover:bg-gray-100 transition ${isToday ? "border-blue-500 bg-blue-50" : "border-gray-200"}`}
-                onClick={() => { setCursor(new Date(y, m, day)); setView("day"); }}>
-                <div className="text-xs font-semibold mb-1">{day}</div>
-                {dayTasks.slice(0, 3).map((t) => (
-                  <div key={t.id} className={`text-[10px] px-1 rounded mb-0.5 truncate text-white ${PRIORITY_COLORS[t.priority]} ${t.status === "completed" ? "line-through opacity-50" : ""}`}>
-                    {t.title}
+      <>
+        <CalendarShell view={view} onView={setView} cursor={cursor} onNav={nav} onToday={navToday} onAddTask={() => { setModalDate(formatDate(cursor)); setShowCreateModal(true); }}>
+          <div className="grid grid-cols-7 text-center text-sm font-semibold text-gray-500 mb-1">
+            {DAYS.map((d) => (<div key={d} className="py-1">{d}</div>))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {cells.map((day, i) => {
+              if (day === null) return <div key={`e-${i}`} />;
+              const ds = formatDate(new Date(y, m, day));
+              const dayTasks = tasksByDate[ds] || [];
+              const isToday = ds === today;
+              return (
+                <div key={ds}
+                  className={`border rounded p-1 min-h-[80px] cursor-pointer hover:bg-gray-100 transition ${isToday ? "border-blue-500 bg-blue-50" : "border-gray-200"}`}
+                  onClick={() => setMonthPopupDay(monthPopupDay === ds ? null : ds)}>
+                  <div className="text-xs font-semibold mb-1">{day}</div>
+                  {dayTasks.slice(0, 3).map((t) => (
+                    <div key={t.id} className={`text-[10px] px-1 rounded mb-0.5 truncate text-white ${PRIORITY_COLORS[t.priority]} ${t.status === "completed" ? "line-through opacity-50" : ""}`}>
+                      {t.title}
+                    </div>
+                  ))}
+                  {dayTasks.length > 3 && <div className="text-[10px] text-gray-400">+{dayTasks.length - 3}</div>}
+                </div>
+              );
+            })}
+          </div>
+
+          {monthPopupDay && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setMonthPopupDay(null)}>
+              <div className="bg-white rounded shadow-lg p-4 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold">
+                    {new Date(monthPopupDay).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}
+                  </h3>
+                  <button className="text-gray-400 hover:text-gray-600 text-lg" onClick={() => setMonthPopupDay(null)}>&times;</button>
+                </div>
+                {popupTasks.length === 0 ? (
+                  <p className="text-sm text-gray-400 mb-3">Нет задач</p>
+                ) : (
+                  <div className="space-y-1 mb-3 max-h-48 overflow-y-auto">
+                    {popupTasks.map((t) => (
+                      <div key={t.id} className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={t.status === "completed"} onChange={() => handleToggleTask(t)} className="cursor-pointer" />
+                        <span className={`flex-1 ${t.status === "completed" ? "line-through text-gray-400" : ""}`}>
+                          {t.due_time && <span className="font-mono text-xs mr-1">{t.due_time}</span>}
+                          {t.title}
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded text-white ${PRIORITY_COLORS[t.priority]}`}>{PRIORITY_LABELS[t.priority]}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {dayTasks.length > 3 && <div className="text-[10px] text-gray-400">+{dayTasks.length - 3}</div>}
+                )}
+                <div className="border-t pt-3">
+                  <QuickAdd dateStr={monthPopupDay} onAdd={(d) => { handleAddTask(d); setMonthPopupDay(null); }}
+                    title={newTitle} onTitle={setNewTitle} time={newTime} onTime={setNewTime}
+                    priority={newPriority} onPriority={setNewPriority} />
+                </div>
               </div>
-            );
-          })}
-        </div>
-      </CalendarShell>
+            </div>
+          )}
+        </CalendarShell>
+        <NewTaskModal show={showCreateModal} title={modalTitle} onTitle={setModalTitle} date={modalDate} onDate={setModalDate} time={modalTime} onTime={setModalTime} priority={modalPriority} onPriority={setModalPriority} onCreate={handleCreateFromModal} onClose={() => setShowCreateModal(false)} busy={createTask.isPending} />
+      </>
     );
   }
 
@@ -237,36 +307,39 @@ export default function Calendar() {
   if (view === "year") {
     const y = cursor.getFullYear();
     return (
-      <CalendarShell view={view} onView={setView} cursor={cursor} onNav={nav} onToday={navToday}>
-        <div className="grid grid-cols-3 gap-4">
-          {Array.from({ length: 12 }, (_, m) => {
-            const dim = daysInMonth(y, m);
-            return (
-              <div key={m} className="border rounded p-2">
-                <div className="text-sm font-semibold mb-1">{MONTHS[m]}</div>
-                <div className="grid grid-cols-7 text-[10px] text-gray-400 mb-1">
-                  {DAYS.map((d) => (<div key={d} className="text-center">{d[0]}</div>))}
+      <>
+        <CalendarShell view={view} onView={setView} cursor={cursor} onNav={nav} onToday={navToday} onAddTask={() => { setModalDate(formatDate(cursor)); setShowCreateModal(true); }}>
+          <div className="grid grid-cols-3 gap-4">
+            {Array.from({ length: 12 }, (_, m) => {
+              const dim = daysInMonth(y, m);
+              return (
+                <div key={m} className="border rounded p-2">
+                  <div className="text-sm font-semibold mb-1">{MONTHS[m]}</div>
+                  <div className="grid grid-cols-7 text-[10px] text-gray-400 mb-1">
+                    {DAYS.map((d) => (<div key={d} className="text-center">{d[0]}</div>))}
+                  </div>
+                  <div className="grid grid-cols-7 text-[10px] gap-0.5">
+                    {Array.from({ length: startDayOfWeek(y, m) }, (_, i) => <div key={`p-${i}`} />)}
+                    {Array.from({ length: dim }, (_, d) => {
+                      const ds = formatDate(new Date(y, m, d + 1));
+                      const hasTasks = (tasksByDate[ds]?.length ?? 0) > 0;
+                      const isToday = ds === today;
+                      return (
+                        <div key={d + 1}
+                          className={`text-center rounded cursor-pointer hover:bg-gray-200 ${isToday ? "bg-blue-500 text-white" : ""} ${hasTasks ? "font-bold" : ""}`}
+                          onClick={() => { setCursor(new Date(y, m, d + 1)); setView("day"); }}>
+                          {d + 1}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="grid grid-cols-7 text-[10px] gap-0.5">
-                  {Array.from({ length: startDayOfWeek(y, m) }, (_, i) => <div key={`p-${i}`} />)}
-                  {Array.from({ length: dim }, (_, d) => {
-                    const ds = formatDate(new Date(y, m, d + 1));
-                    const hasTasks = (tasksByDate[ds]?.length ?? 0) > 0;
-                    const isToday = ds === today;
-                    return (
-                      <div key={d + 1}
-                        className={`text-center rounded cursor-pointer hover:bg-gray-200 ${isToday ? "bg-blue-500 text-white" : ""} ${hasTasks ? "font-bold" : ""}`}
-                        onClick={() => { setCursor(new Date(y, m, d + 1)); setView("day"); }}>
-                        {d + 1}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </CalendarShell>
+              );
+            })}
+          </div>
+        </CalendarShell>
+        <NewTaskModal show={showCreateModal} title={modalTitle} onTitle={setModalTitle} date={modalDate} onDate={setModalDate} time={modalTime} onTime={setModalTime} priority={modalPriority} onPriority={setModalPriority} onCreate={handleCreateFromModal} onClose={() => setShowCreateModal(false)} busy={createTask.isPending} />
+      </>
     );
   }
 
@@ -275,12 +348,13 @@ export default function Calendar() {
 
 // --- Sub-components ---
 
-function CalendarShell({ view, onView, cursor, onNav, onToday, children }: {
+function CalendarShell({ view, onView, cursor, onNav, onToday, onAddTask, children }: {
   view: ViewMode;
   onView: (v: ViewMode) => void;
   cursor: Date;
   onNav: (d: number) => void;
   onToday: () => void;
+  onAddTask: () => void;
   children: React.ReactNode;
 }) {
   const views: ViewMode[] = ["day", "week", "month", "year"];
@@ -295,6 +369,7 @@ function CalendarShell({ view, onView, cursor, onNav, onToday, children }: {
         <button onClick={onToday} className="px-3 py-1 border rounded text-sm hover:bg-gray-100 font-semibold">Сегодня</button>
         <button onClick={() => onNav(1)} className="px-3 py-1 border rounded text-sm hover:bg-gray-100">▶</button>
         <span className="text-lg font-bold flex-1">{title}</span>
+        <button onClick={onAddTask} className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">+ Новая задача</button>
         <div className="flex gap-1">
           {views.map((v) => (
             <button key={v} onClick={() => onView(v)}
@@ -318,7 +393,7 @@ function TaskCard({ task, onToggle, onDelete }: { task: TaskItem; onToggle: (t: 
         <span className="font-medium">{task.title}</span>
         {task.due_time && <span className="text-gray-500 ml-2 text-sm">{task.due_time}</span>}
         {task.assignee && <span className="text-gray-400 ml-2 text-sm">@{task.assignee}</span>}
-        <span className={`ml-2 text-xs px-1.5 py-0.5 rounded text-white ${PRIORITY_COLORS[task.priority]}`}>{task.priority}</span>
+        <span className={`ml-2 text-xs px-1.5 py-0.5 rounded text-white ${PRIORITY_COLORS[task.priority]}`}>{PRIORITY_LABELS[task.priority]}</span>
       </div>
       <button onClick={() => { if (showDel || window.confirm(`Удалить "${task.title}"?`)) { onDelete(task.id); } else { setShowDel(true); } }}
         className="text-red-500 text-sm hover:text-red-700">✕</button>
@@ -345,11 +420,56 @@ function QuickAdd({ dateStr, onAdd, title, onTitle, time, onTime, priority, onPr
           className="w-16 border rounded px-2 py-1 text-sm" />
         <select value={priority} onChange={(e) => onPriority(e.target.value as any)}
           className="border rounded px-2 py-1 text-sm">
-          <option value="low">Low</option>
-          <option value="medium">Med</option>
-          <option value="high">High</option>
+          <option value="low">Низкий</option>
+          <option value="medium">Средний</option>
+          <option value="high">Высокий</option>
         </select>
         <button onClick={() => onAdd(dateStr)} className="bg-blue-600 text-white px-3 py-1 rounded text-sm">+</button>
+      </div>
+    </div>
+  );
+}
+
+function NewTaskModal({ show, title, onTitle, date, onDate, time, onTime, priority, onPriority, onCreate, onClose, busy }: {
+  show: boolean;
+  title: string;
+  onTitle: (v: string) => void;
+  date: string;
+  onDate: (v: string) => void;
+  time: string;
+  onTime: (v: string) => void;
+  priority: "low" | "medium" | "high";
+  onPriority: (v: "low" | "medium" | "high") => void;
+  onCreate: () => void;
+  onClose: () => void;
+  busy: boolean;
+}) {
+  if (!show) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded shadow-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold">Новая задача</h3>
+          <button className="text-gray-400 hover:text-gray-600 text-lg" onClick={onClose}>&times;</button>
+        </div>
+        <div className="space-y-3">
+          <input value={title} onChange={(e) => onTitle(e.target.value)}
+            placeholder="Название задачи" className="w-full border rounded px-3 py-2 text-sm" autoFocus />
+          <input value={date} onChange={(e) => onDate(e.target.value)}
+            type="date" className="w-full border rounded px-3 py-2 text-sm" />
+          <input value={time} onChange={(e) => onTime(e.target.value)}
+            type="time" className="w-full border rounded px-3 py-2 text-sm" />
+          <select value={priority} onChange={(e) => onPriority(e.target.value as any)}
+            className="w-full border rounded px-3 py-2 text-sm">
+            <option value="low">Низкий приоритет</option>
+            <option value="medium">Средний приоритет</option>
+            <option value="high">Высокий приоритет</option>
+          </select>
+          <button onClick={onCreate} disabled={!title.trim() || busy}
+            className="w-full bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50">
+            {busy ? "Создание..." : "Создать"}
+          </button>
+        </div>
       </div>
     </div>
   );

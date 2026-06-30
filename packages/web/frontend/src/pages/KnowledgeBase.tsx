@@ -55,7 +55,7 @@ export default function KnowledgeBase() {
     { key: "id", label: "#" },
     {
       key: "topic",
-      label: "Topic",
+      label: "Тема",
       render: (r: any) => (
         <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded">
           {r.topic}
@@ -64,12 +64,12 @@ export default function KnowledgeBase() {
     },
     {
       key: "question_keywords",
-      label: "Keywords",
+      label: "Ключевые слова",
       render: (r: any) => (r.question_keywords ?? []).join(", "),
     },
     {
       key: "answer_text",
-      label: "Answer",
+      label: "Ответ",
       render: (r: any) =>
         (r.answer_text ?? "").length > 80
           ? r.answer_text.slice(0, 80) + "…"
@@ -77,7 +77,7 @@ export default function KnowledgeBase() {
     },
     {
       key: "created_at",
-      label: "Created",
+      label: "Создано",
       render: (r: any) =>
         r.created_at ? new Date(r.created_at).toLocaleDateString() : "",
     },
@@ -85,11 +85,11 @@ export default function KnowledgeBase() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold mb-4">Knowledge Base</h1>
+      <h1 className="text-xl font-bold mb-4">База знаний</h1>
 
       <div className="bg-white rounded shadow p-4 mb-4 space-y-3">
         <h2 className="font-semibold text-sm">
-          {editing ? "Edit entry" : "New entry"}
+          {editing ? "Редактировать" : "Новая запись"}
         </h2>
         <div className="flex gap-3 flex-wrap">
           <select
@@ -97,7 +97,7 @@ export default function KnowledgeBase() {
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
           >
-            <option value="">Topic</option>
+            <option value="">Тема</option>
             {TOPICS.map((t) => (
               <option key={t} value={t}>
                 {t}
@@ -106,7 +106,7 @@ export default function KnowledgeBase() {
           </select>
           <input
             className="border rounded px-2 py-1.5 text-sm flex-1 min-w-[200px]"
-            placeholder="Keywords (comma separated)"
+            placeholder="Ключевые слова (через запятую)"
             value={keywords}
             onChange={(e) => setKeywords(e.target.value)}
           />
@@ -114,7 +114,7 @@ export default function KnowledgeBase() {
         <textarea
           className="w-full border rounded px-2 py-1.5 text-sm"
           rows={3}
-          placeholder="Answer text"
+          placeholder="Текст ответа"
           value={answer}
           onChange={(e) => setAnswer(e.target.value)}
         />
@@ -124,7 +124,7 @@ export default function KnowledgeBase() {
             disabled={!topic || !keywords || !answer || save.isPending}
             onClick={handleSave}
           >
-            {save.isPending ? "Saving..." : editing ? "Update" : "Add"}
+            {save.isPending ? "Сохранение..." : editing ? "Обновить" : "Добавить"}
           </button>
           {editing && (
             <button
@@ -136,14 +136,14 @@ export default function KnowledgeBase() {
                 setAnswer("");
               }}
             >
-              Cancel
+              Отмена
             </button>
           )}
         </div>
       </div>
 
       {isLoading ? (
-        <p>Loading…</p>
+        <p>Загрузка…</p>
       ) : (
         <Table
           cols={cols}

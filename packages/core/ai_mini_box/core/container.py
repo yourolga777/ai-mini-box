@@ -7,6 +7,7 @@ from ai_mini_box.infrastructure.repositories import (
     SqliteContactRepo,
     SqliteKnowledgeBaseRepo,
     SqliteMessageRepo,
+    SqliteOrderItemRepo,
     SqliteOrderRepo,
     SqliteProductRepo,
     SqliteTaskRepo,
@@ -20,6 +21,7 @@ class RepoContainer:
         self.products = SqliteProductRepo(session)
         self.messages = SqliteMessageRepo(session)
         self.orders = SqliteOrderRepo(session)
+        self.order_items = SqliteOrderItemRepo(session)
         self.tasks = SqliteTaskRepo(session)
         self.kb = SqliteKnowledgeBaseRepo(session)
 

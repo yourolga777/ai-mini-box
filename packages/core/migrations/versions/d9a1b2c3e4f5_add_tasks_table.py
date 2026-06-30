@@ -18,7 +18,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table('tasks',
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    if 'tasks' not in inspector.get_table_names():
+        op.create_table('tasks',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
         sa.Column('title', sa.String(length=255), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),

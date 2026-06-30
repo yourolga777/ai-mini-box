@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator, Optional
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
@@ -13,6 +13,13 @@ class Base(DeclarativeBase):
 
 _engine = None
 _SessionLocal = None
+
+
+def get_db_url() -> str:
+    env_url = os.environ.get("DATABASE_URL")
+    if env_url:
+        return env_url
+    return f"sqlite:///{get_db_path()}"
 
 
 def get_db_path() -> Path:
@@ -26,8 +33,24 @@ def init_db(db_path: Optional[str | Path] = None):
     global _engine, _SessionLocal
     db_path = Path(db_path) if db_path else get_db_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    _engine = create_engine(f"sqlite:///{db_path}", echo=False, connect_args={"check_same_thread": False})
+    _engine = create_engine(
+        f"sqlite:///{db_path}",
+        echo=False,
+        connect_args={"check_same_thread": False, "timeout": 30},
+    )
+    event.listen(_engine, "connect", _enable_sqlite_fk)
     _SessionLocal = sessionmaker(bind=_engine)
+    import ai_mini_box.infrastructure.orm_models  # noqa: F401
+    Base.metadata.create_all(bind=_engine)
+
+
+def _enable_sqlite_fk(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA busy_timeout=30000")
+    cursor.close()
 
 
 def get_engine():

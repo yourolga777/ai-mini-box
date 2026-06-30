@@ -28,11 +28,15 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-xdist>=3", "pytest-cov>=5"]
+analytics = ["pandas", "matplotlib", "scikit-learn"]
 
 [project.urls]
 Homepage = "https://github.com/Kibertum/ai-mini-box"
 Repository = "https://github.com/Kibertum/ai-mini-box"
 Documentation = "https://github.com/Kibertum/ai-mini-box"
+
+[project.entry-points."ai_mini_box.tools"]
+analytics = "ai_mini_box.tools.analytics:register"
 
 [project.scripts]
 ai-mini-box = "ai_mini_box.cli:app"

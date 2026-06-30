@@ -33,6 +33,12 @@ app.add_typer(config_app, name="config")
 db_app = typer.Typer(help="Database management")
 app.add_typer(db_app, name="db")
 
+plugin_app = typer.Typer(help="Manage plugins")
+app.add_typer(plugin_app, name="plugin")
+
+business_app = typer.Typer(help="Manage business configuration")
+app.add_typer(business_app, name="business")
+
 
 @app.command()
 def init(
@@ -77,6 +83,17 @@ def init(
         _run_migrations(Path(db_path))
         typer.echo("  Migrations applied.")
 
+    from ai_mini_box.core.services.plugin_catalog import PluginCatalog
+
+    PluginCatalog().sync()
+    typer.echo("  Plugin catalog created.")
+
+    from ai_mini_box.infrastructure.business_config import BusinessConfigManager
+
+    bm = BusinessConfigManager()
+    bm.save(bm.load())
+    typer.echo("  Business config created.")
+
     typer.echo("Done.")
 
 
@@ -98,6 +115,43 @@ def check_db():
     except Exception as e:
         typer.echo(f"  Database: ERROR - {e}")
         raise typer.Exit(code=1)
+
+
+@plugin_app.command(name="catalog")
+def plugin_catalog():
+    """List available plugins with installation status."""
+    from ai_mini_box.core.services.plugin_catalog import PluginCatalog
+
+    catalog = PluginCatalog()
+    status = catalog.get_status()
+    if not status:
+        typer.echo("  No plugins registered in catalog.")
+        return
+
+    for entry in status:
+        name = entry["title"]
+        pkg = entry["package"]
+        if entry["installed"]:
+            ver = entry["installed_version"]
+            line = f"  {name:<25} {pkg:<30} {typer.style(f'installed ({ver})', fg=typer.colors.GREEN)}"
+        else:
+            line = f"  {name:<25} {pkg:<30} {typer.style('install', fg=typer.colors.YELLOW)}"
+        typer.echo(line)
+
+    count = sum(1 for e in status if e["installed"])
+    total = len(status)
+    typer.echo(f"\n  {count}/{total} plugins installed.")
+    typer.echo(f"  Use: pip install <package>  to install a plugin")
+
+
+@plugin_app.command(name="refresh")
+def plugin_refresh():
+    """Sync plugin catalog with built-in version."""
+    from ai_mini_box.core.services.plugin_catalog import PluginCatalog
+
+    catalog = PluginCatalog()
+    catalog.sync()
+    typer.echo(typer.style("  Catalog refreshed from built-in.", fg=typer.colors.GREEN))
 
 
 def _get_migrations_dir() -> Path:
@@ -218,6 +272,81 @@ def config_unset(
         typer.echo(typer.style(f"  Reset: {key} to default", fg=typer.colors.GREEN))
     else:
         typer.echo(f"  {key} already at default")
+
+
+@business_app.command(name="show")
+def business_show():
+    """Show business configuration."""
+    from ai_mini_box.core.models import BusinessConfig
+    from ai_mini_box.infrastructure.business_config import BusinessConfigManager
+
+    cfg = BusinessConfigManager().load()
+    typer.echo(typer.style("[Business]", bold=True, fg=typer.colors.CYAN))
+    for key in BusinessConfig.model_fields:
+        value = getattr(cfg, key)
+        if key == "faq":
+            typer.echo(f"  faq ({len(value)} items)")
+            for i, item in enumerate(value):
+                q = item.get("question", "")
+                a = item.get("answer", "")
+                typer.echo(f"    [{i}] Q: {q}")
+                typer.echo(f"         A: {a}")
+        else:
+            typer.echo(f"  {key} = {value}")
+
+
+@business_app.command(name="set")
+def business_set(
+    key: str = typer.Argument(..., help="Config key"),
+    value: str = typer.Argument(..., help="Config value"),
+):
+    """Set a business config value."""
+    from ai_mini_box.core.models import BusinessConfig
+    from ai_mini_box.infrastructure.business_config import BusinessConfigManager
+
+    manager = BusinessConfigManager()
+    try:
+        manager.set(key, value)
+    except ValueError as e:
+        typer.echo(typer.style(f"Error: {e}", fg=typer.colors.RED))
+        raise typer.Exit(code=1)
+    typer.echo(typer.style(f"  Updated: {key} = {value}", fg=typer.colors.GREEN))
+
+
+@business_app.command(name="faq")
+def business_faq(
+    action: str = typer.Argument(..., help="add or remove"),
+    question: str = typer.Argument(None, help="Question text (for add)"),
+    answer: str = typer.Argument(None, help="Answer text (for add)"),
+):
+    """Manage FAQ items: add <question> <answer> or remove <index>."""
+    from ai_mini_box.infrastructure.business_config import BusinessConfigManager
+
+    manager = BusinessConfigManager()
+    cfg = manager.load()
+
+    if action == "add":
+        if not question or not answer:
+            typer.echo(typer.style("Error: faq add requires <question> <answer>", fg=typer.colors.RED))
+            raise typer.Exit(code=1)
+        cfg.faq.append({"question": question, "answer": answer})
+        manager.save(cfg)
+        typer.echo(typer.style(f"  Added FAQ #{len(cfg.faq) - 1}", fg=typer.colors.GREEN))
+    elif action == "remove":
+        try:
+            idx = int(question)
+        except (TypeError, ValueError):
+            typer.echo(typer.style("Error: faq remove requires numeric <index>", fg=typer.colors.RED))
+            raise typer.Exit(code=1)
+        if idx < 0 or idx >= len(cfg.faq):
+            typer.echo(typer.style(f"Error: index {idx} out of range (0-{len(cfg.faq) - 1})", fg=typer.colors.RED))
+            raise typer.Exit(code=1)
+        removed = cfg.faq.pop(idx)
+        manager.save(cfg)
+        typer.echo(typer.style(f"  Removed FAQ #{idx}: {removed.get('question', '')}", fg=typer.colors.GREEN))
+    else:
+        typer.echo(typer.style(f"Error: unknown action '{action}', use add or remove", fg=typer.colors.RED))
+        raise typer.Exit(code=1)
 
 
 def _mask_value(key: str, value: str) -> str:

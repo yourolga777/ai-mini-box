@@ -1,0 +1,54 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - data:/data
+    environment:
+      - AI_BOX_DB_PATH=/data/app.db
+      - AI_BOX_HOST=0.0.0.0
+      - AI_BOX_PORT=8080
+      - AI_BOX_SECRET=${AI_BOX_SECRET:-changeme}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  telegram:
+    build:
+      context: .
+      dockerfile: Dockerfile.telegram
+    volumes:
+      - data:/data
+    environment:
+      - AI_BOX_DB_PATH=/data/app.db
+      - AI_BOX_SECRET=${AI_BOX_SECRET:-changeme}
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+  llm:
+    build:
+      context: .
+      dockerfile: Dockerfile.llm
+    volumes:
+      - data:/data
+      - models:/models
+    environment:
+      - AI_BOX_DB_PATH=/data/app.db
+      - AI_BOX_SECRET=${AI_BOX_SECRET:-changeme}
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  data:
+  models:

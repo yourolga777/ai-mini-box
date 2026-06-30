@@ -104,6 +104,9 @@ if svc:
 | `docs/plugins/09-web-management.md` | Web UI: установка, управление демонами |
 | `docs/plugins/10-service-registry.md` | Service Registry — как регистрировать и получать сервисы |
 | `docs/plugins/11-llm-plugin.md` | **Спецификация LLM-плагина** (если пишешь LLM) |
+| `docs/plugins/12-config-provider.md` | **Config Provider Protocol** — как expose конфиг в веб-интерфейс |
+| `docs/email-developer-prompt.md` | **Системный промпт Email-плагина** (если пишешь email) |
+| `docs/plugins/13-email-plugin.md` | **Гайд по Email-плагину** (паттерны, pitfalls) |
 
 ### Справочные
 
@@ -123,6 +126,7 @@ if svc:
 4. **Имя пакета:** `ai-mini-box-{name}`. Веб-интерфейс проверяет соответствие паттерну `^ai[-_]mini[-_]box[-_]`.
 5. **Тип сборки:** hatchling.
 6. **Минимальная версия Python:** 3.12.
+7. **Вопросы — одним списком, не popup.** Не задавай вопросы через OpenCode-окна. Когда есть неоднозначность — собери **все** вопросы в конец ответа списком, чтобы пользователь скопировал и отдал одной порцией.
 
 ### Рекомендации
 
@@ -132,6 +136,19 @@ if svc:
 4. **Логируй в отдельный файл.** `logger.add("logs/plugin_{name}.log", rotation="1 MB")`.
 5. **Обрабатывай сигналы в демонах.** SIGTERM/SIGINT — корректное завершение.
 6. **Следуй семверу.** `major.minor.patch`.
+7. **Регистрируй ConfigProvider.** Если плагин имеет конфиг, который должен быть виден/редактируем через веб-интерфейс — реализуй `ConfigProvider` (см. `docs/plugins/12-config-provider.md`). Без него настройки плагина будут недоступны в вебе.
+
+## TAUSIK Workflow
+
+Этот проект использует TAUSIK для управления задачами. Обязательные шаги:
+
+1. **`task start <slug>`** — перед любым изменением кода. Создаёт задачу с goal + acceptance_criteria.
+2. **`task log <slug> "message"`** — логировать каждый осмысленный шаг.
+3. **`dead-end "approach" "reason"`** — документировать тупиковые подходы.
+4. **`tausik verify --task <slug>`** — перед завершением задачи (запускает тяжелые gates).
+5. **`task done <slug> --ac-verified`** — закрытие задачи после зелёного verify.
+
+TAUSIK-роль: `plugin-developer`. Создавай задачи с `--role plugin-developer --stack python`.
 
 ## Процесс разработки плагина
 
@@ -150,7 +167,8 @@ if svc:
 |---|---|
 | Не хватает модели/репозитория в core | Открыть issue архитектору каркаса |
 | Нужен сервис другого плагина | Использовать `get_service("name")` из registry |
-| Нужна своя конфигурация | Свой JSON-файл в `data/` (не трогать AppConfig) |
+| Нужна своя конфигурация | Свой JSON-файл в `data/` + ConfigProvider для веба |
+| Нужно показать конфиг в веб-интерфейсе | Реализовать `ConfigProvider` (docs/plugins/12-config-provider.md) |
 | Нужен веб-интерфейс | API-эндпоинты в своём пакете, фронтенд — через entry points |
 | Не проходят тесты | Проверить: `pip install -e packages/core/` переустановлен |
 
@@ -162,4 +180,5 @@ if svc:
 |---|---|---|
 | demo | `packages/demo/` | Простейший: 3 команды, 9 тестов |
 | telegram | `packages/telegram/` | Демон, REST API, своя конфигурация |
+| email | `packages/email/` | IMAP/SMTP, демон поллинга, stdlib-only |
 | web | `packages/web/` | FastAPI, React PWA, plugin manager |

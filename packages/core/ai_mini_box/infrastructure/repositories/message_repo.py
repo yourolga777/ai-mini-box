@@ -52,6 +52,15 @@ class SqliteMessageRepo(MessageRepo):
         self.session.refresh(orm_obj)
         return message_from_orm(orm_obj)
 
+    def list_by_chat(self, chat_id: str, limit: int = 5) -> list[Message]:
+        stmt = (
+            select(MessageModel)
+            .where(MessageModel.chat_id == chat_id)
+            .order_by(MessageModel.received_at.desc())
+            .limit(limit)
+        )
+        return [message_from_orm(r) for r in self.session.execute(stmt).scalars()]
+
     def search(self, query: str, topic: Optional[str] = None) -> list[Message]:
         q = query.lower()
         stmt = select(MessageModel)

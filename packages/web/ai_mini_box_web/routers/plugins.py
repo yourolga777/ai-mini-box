@@ -1,4 +1,5 @@
 import asyncio
+import importlib.metadata
 import os
 import sys
 import uuid
@@ -7,6 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
+from ai_mini_box.core.services.plugin_catalog import PluginCatalog
 from ai_mini_box_web.services.plugin_manager import (
     PACKAGE_RE,
     PROTECTED_PLUGINS,
@@ -16,6 +18,7 @@ from ai_mini_box_web.services.plugin_manager import (
 router = APIRouter()
 
 _manager = PluginManager()
+_catalog = PluginCatalog()
 
 _UPLOAD_DIR = Path("data/uploads")
 
@@ -48,11 +51,33 @@ def set_config(body: ConfigSetRequest):
     return result
 
 
+# --- catalog ---
+
+@router.get("/catalog")
+def list_catalog():
+    return _catalog.get_status()
+
 # --- plugin CRUD ---
 
 @router.get("")
 def list_plugins():
-    return _manager.list_plugins()
+    plugins = _manager.list_plugins()
+    catalog_map = {e["name"]: e for e in _catalog.get_status()}
+    for p in plugins:
+        entry = catalog_map.get(p["name"])
+        p["description"] = entry.get("description", "") if entry else ""
+        p["version"] = entry.get("version") if entry else None
+        p["installed_version"] = None
+        p["has_update"] = False
+        if entry and entry.get("package"):
+            try:
+                pkg = entry["package"]
+                p["installed_version"] = importlib.metadata.version(pkg)
+            except (importlib.metadata.PackageNotFoundError, Exception):
+                p["installed_version"] = None
+            if p["installed_version"] and entry.get("version"):
+                p["has_update"] = p["installed_version"] != entry["version"]
+    return plugins
 
 
 @router.get("/check/package")
@@ -60,6 +85,46 @@ def check_package(package: str):
     if not PACKAGE_RE.match(package):
         raise HTTPException(400, detail="Invalid package name. Must match ai-mini-box-* or ai_mini_box_*")
     return {"installed": _manager.check_installed(package)}
+
+
+@router.get("/{name}/config-schema")
+def get_plugin_config_schema(name: str):
+    try:
+        from ai_mini_box.core.services.config_provider import get_config_provider
+        provider = get_config_provider(name)
+        if provider is not None:
+            return provider.get_schema()
+    except Exception:
+        pass
+    plugin = _manager.get_plugin(name)
+    if plugin is None:
+        raise HTTPException(404, detail=f"Plugin '{name}' not found")
+    try:
+        module_path = plugin["module"].split(":")[0]
+        mod = importlib.import_module(module_path)
+        if not hasattr(mod, "config_schema"):
+            raise HTTPException(404, detail=f"Plugin '{name}' does not expose a config schema")
+        return mod.config_schema()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, detail=f"Error loading config schema: {e}")
+
+
+@router.get("/{name}/config")
+def get_plugin_config(name: str):
+    cfg = _manager.get_plugin_config(name)
+    if cfg is None:
+        raise HTTPException(404, detail=f"No config found for plugin '{name}'")
+    return cfg
+
+
+@router.post("/{name}/config")
+def set_plugin_config(name: str, body: dict):
+    result = _manager.set_plugin_config(name, body)
+    if not result["success"]:
+        raise HTTPException(400, detail=result.get("error", "Unknown error"))
+    return result
 
 
 @router.get("/{name}")
@@ -144,6 +209,13 @@ def start_plugin_daemon(name: str):
     return result
 
 
+@router.post("/{name}/update")
+def update_plugin(name: str):
+    if not _manager.get_plugin(name):
+        raise HTTPException(404, detail=f"Plugin '{name}' not found")
+    return _manager.update_plugin(name)
+
+
 @router.post("/{name}/stop")
 def stop_plugin_daemon(name: str):
     result = _manager.stop_daemon(name)
@@ -157,16 +229,14 @@ def verify_token(name: str):
     if name != "telegram":
         raise HTTPException(400, detail="Only telegram plugin supports token verification")
 
-    from ai_mini_box.infrastructure.config import JsonConfigManager
-    raw = JsonConfigManager().load()
-    token = raw.telegram_token
-    if not token:
-        raise HTTPException(400, detail="telegram_token not set")
+    from ai_mini_box.core.services.registry import get_service
 
-    from ai_mini_box_telegram.bot import TelegramBot
-    bot = TelegramBot(token)
+    svc = get_service("telegram")
+    if svc is None:
+        raise HTTPException(502, detail="Telegram service not available")
+
     try:
-        me = bot.get_me()
+        me = svc.verify_token()
     except Exception as e:
         raise HTTPException(502, detail=f"Telegram API error: {e}")
 
@@ -184,7 +254,16 @@ def verify_token(name: str):
 @router.post("/{name}/action")
 def plugin_action(name: str, body: ActionRequest):
     if name == "telegram" and body.action == "poll":
-        return _run_poll()
+        from ai_mini_box.core.services.registry import get_service
+
+        svc = get_service("telegram")
+        if svc is None:
+            raise HTTPException(502, detail="Telegram service not available")
+        result = svc.poll()
+        if not result.get("success"):
+            raise HTTPException(502, detail=result.get("error", "Poll failed"))
+        result["output"] = f"Обработано {result.get('count', 0)} новых сообщений"
+        return result
     raise HTTPException(400, detail=f"Unknown action '{body.action}' for plugin '{name}'")
 
 
@@ -192,56 +271,6 @@ def plugin_action(name: str, body: ActionRequest):
 def get_plugin_logs(name: str):
     lines = _manager.get_logs(name)
     return {"plugin": name, "lines": lines}
-
-
-# --- internal ---
-
-def _run_poll():
-    token, allowed, interval = _resolve_telegram_config()
-    if not token:
-        raise HTTPException(400, detail="telegram_token not set")
-
-    from ai_mini_box_telegram.bot import TelegramBot
-    from ai_mini_box_telegram.handlers import process_update
-    from ai_mini_box_telegram.state import FileTelegramStateRepo
-    from ai_mini_box.infrastructure.database import get_db
-
-    bot = TelegramBot(token)
-    state = FileTelegramStateRepo()
-    offset = state.get_offset()
-    try:
-        updates = bot.get_updates(offset=offset)
-    except Exception as e:
-        raise HTTPException(502, detail=f"Telegram API error: {e}")
-
-    count = 0
-    detected_chat_ids: list[int] = []
-    for update in updates:
-        with get_db() as session:
-            if process_update(update, session, allowed_chat_ids=allowed):
-                count += 1
-        state.save_offset(update["update_id"] + 1)
-        msg_data = update.get("message") or update.get("business_message")
-        if msg_data:
-            cid = msg_data["chat"]["id"]
-            if cid not in detected_chat_ids:
-                detected_chat_ids.append(cid)
-
-    return {
-        "success": True,
-        "count": count,
-        "detected_chat_ids": detected_chat_ids,
-        "output": f"Processed {count} new messages",
-    }
-
-
-def _resolve_telegram_config() -> tuple:
-    from ai_mini_box.infrastructure.config import JsonConfigManager
-    raw = JsonConfigManager().load()
-    token = raw.telegram_token
-    allowed = raw.telegram_allowed_chat_ids
-    interval = raw.poll_interval
-    return token, allowed, interval
 
 
 async def _delayed_reload():

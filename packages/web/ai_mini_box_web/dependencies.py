@@ -9,3 +9,8 @@ from ai_mini_box.infrastructure.database import get_db
 def get_repos() -> Generator[RepoContainer, None, None]:
     with get_db() as session:
         yield RepoContainer(session)
+
+
+def _get_db_session() -> Generator[Session, None, None]:
+    with get_db() as session:
+        yield session

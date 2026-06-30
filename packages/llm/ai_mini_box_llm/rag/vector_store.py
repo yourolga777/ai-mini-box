@@ -1,49 +1,87 @@
 from __future__ import annotations
 
 import json
-import math
+import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
+
+import numpy as np
+from loguru import logger
+
+try:
+    import faiss
+except ImportError:
+    faiss = None
 
 
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(y * y for y in b))
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot / (norm_a * norm_b)
+class FaissVectorStore:
+    def __init__(self, dim: int = 384, index_path: str = "data/rag_index.faiss"):
+        self._dim = dim
+        self._index_path = Path(index_path)
+        self._metadata: list[dict[str, Any]] = []
+        if faiss is not None:
+            self._index = faiss.IndexFlatIP(dim)
+        else:
+            self._index = None
 
+    @property
+    def available(self) -> bool:
+        return faiss is not None and self._index is not None
 
-class VectorStore:
-    def __init__(self, index_path: str = "data/llm_rag_index.json"):
-        self.index_path = Path(index_path)
-        self.entries: list[dict[str, Any]] = []
+    def add(self, text: str, embedding: list[float], metadata: dict[str, Any] | None = None) -> None:
+        if not self.available or not embedding:
+            return
+        vec = np.array([embedding], dtype=np.float32)
+        faiss.normalize_L2(vec)
+        self._index.add(vec)
+        entry = {"text": text, **(metadata or {})}
+        self._metadata.append(entry)
 
-    def add(self, entry: dict[str, Any]) -> None:
-        self.entries.append(entry)
-
-    def search(self, query_vec: list[float], top_k: int = 3) -> list[dict[str, Any]]:
-        if not query_vec or not self.entries:
+    def search(self, query_vec: list[float], top_k: int = 3, threshold: float = 0.75) -> list[tuple[str, float, dict[str, Any]]]:
+        if not self.available or not query_vec or self._index.ntotal == 0:
             return []
-        scored = []
-        for entry in self.entries:
-            vec = entry.get("embedding", [])
-            if vec:
-                score = cosine_similarity(query_vec, vec)
-                scored.append((score, entry))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return [entry for score, entry in scored[:top_k] if score > 0.5]
+        vec = np.array([query_vec], dtype=np.float32)
+        faiss.normalize_L2(vec)
+        scores, indices = self._index.search(vec, min(top_k, self._index.ntotal))
+        results: list[tuple[str, float, dict[str, Any]]] = []
+        for score, idx in zip(scores[0], indices[0]):
+            if score >= threshold and 0 <= idx < len(self._metadata):
+                meta = dict(self._metadata[int(idx)])
+                text = meta.pop("text", "")
+                results.append((text, float(score), meta))
+        return results
 
     def save(self) -> None:
-        self.index_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.index_path, "w", encoding="utf-8") as f:
-            json.dump({"entries": self.entries}, f, ensure_ascii=False, default=str)
-
-    def load(self) -> None:
-        if not self.index_path.exists():
-            self.entries = []
+        if not self.available:
             return
-        with open(self.index_path, encoding="utf-8") as f:
-            data = json.load(f)
-        self.entries = data.get("entries", [])
+        self._index_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_faiss = tempfile.NamedTemporaryFile(delete=False, suffix=".faiss", dir=self._index_path.parent)
+        tmp_meta = tmp_faiss.name + ".json"
+        try:
+            faiss.write_index(self._index, tmp_faiss.name)
+            with open(tmp_meta, "w", encoding="utf-8") as f:
+                json.dump(self._metadata, f, ensure_ascii=False, default=str)
+            tmp_faiss.close()
+            import shutil
+            shutil.move(tmp_faiss.name, str(self._index_path))
+            shutil.move(tmp_meta, str(self._index_path) + ".json")
+        except Exception:
+            Path(tmp_faiss.name).unlink(missing_ok=True)
+            Path(tmp_meta).unlink(missing_ok=True)
+            raise
+
+    def load(self) -> bool:
+        if faiss is None:
+            return False
+        index_file = self._index_path
+        meta_file = self._index_path.with_name(self._index_path.name + ".json")
+        if not index_file.exists() or not meta_file.exists():
+            return False
+        try:
+            self._index = faiss.read_index(str(index_file))
+            with open(meta_file, encoding="utf-8") as f:
+                self._metadata = json.load(f)
+            return True
+        except Exception as e:
+            logger.warning("Failed to load FAISS index: {}", e)
+            return False

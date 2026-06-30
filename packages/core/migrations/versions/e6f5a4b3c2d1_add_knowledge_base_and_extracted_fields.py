@@ -30,8 +30,11 @@ def upgrade() -> None:
             sa.Column('updated_at', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
             sa.PrimaryKeyConstraint('id')
         )
-    op.add_column('messages', sa.Column('extracted_phone', sa.String(50), nullable=True))
-    op.add_column('messages', sa.Column('extracted_name', sa.String(255), nullable=True))
+    msg_cols = [c["name"] for c in inspector.get_columns("messages")]
+    if "extracted_phone" not in msg_cols:
+        op.add_column('messages', sa.Column('extracted_phone', sa.String(50), nullable=True))
+    if "extracted_name" not in msg_cols:
+        op.add_column('messages', sa.Column('extracted_name', sa.String(255), nullable=True))
 
 
 def downgrade() -> None:

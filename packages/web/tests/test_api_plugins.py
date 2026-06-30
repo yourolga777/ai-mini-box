@@ -206,19 +206,80 @@ class TestConfig:
         assert resp.status_code == 400
 
 
-class TestAction:
-    def test_poll_action(self, client, monkeypatch):
+class TestCatalog:
+    def test_catalog_returns_list(self, client):
+        resp = client.get("/api/plugins/catalog")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, list)
+
+    def test_catalog_has_status_fields(self, client):
+        resp = client.get("/api/plugins/catalog")
+        data = resp.json()
+        if data:
+            item = data[0]
+            assert "name" in item
+            assert "installed" in item
+            assert "has_update" in item
+
+    def test_catalog_not_found_installed_false(self, client):
+        resp = client.get("/api/plugins/catalog")
+        data = resp.json()
+        for item in data:
+            if item["name"] == "nonexistent":
+                assert item["installed"] is False
+                assert item["has_update"] is False
+
+    def test_list_plugins_enriched(self, client):
+        resp = client.get("/api/plugins")
+        assert resp.status_code == 200
+        data = resp.json()
+        if data:
+            item = data[0]
+            assert "description" in item
+            assert "version" in item or item.get("version") is None
+            assert "has_update" in item
+
+
+class TestUpdate:
+    def test_update_not_found(self, client):
+        resp = client.post("/api/plugins/nonexistent/update")
+        assert resp.status_code == 404
+
+    def test_update_success(self, client, monkeypatch):
         monkeypatch.setattr(
-            "ai_mini_box_web.routers.plugins._resolve_telegram_config",
-            lambda: ("test:token", [], 30),
+            "ai_mini_box_web.services.plugin_manager.PluginManager.get_plugin",
+            lambda self, name: {"name": name, "module": "test", "status": "installed", "pid": None},
         )
         monkeypatch.setattr(
-            "ai_mini_box_web.routers.plugins._run_poll",
-            lambda: {"success": True, "count": 3, "output": "Processed 3 new messages"},
+            "ai_mini_box_web.services.plugin_manager.PluginManager.update_plugin",
+            lambda self, name: {"success": True, "output": "Updated successfully"},
+        )
+        resp = client.post("/api/plugins/demo/update")
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+
+
+class TestAction:
+    def test_poll_action(self, client, monkeypatch):
+        mock_service = type("MockTelegramService", (), {
+            "poll": lambda self: {"success": True, "count": 3, "detected_chat_ids": [123], "error": None}
+        })()
+        monkeypatch.setattr(
+            "ai_mini_box.core.services.registry.get_service",
+            lambda name: mock_service if name == "telegram" else None,
         )
         resp = client.post("/api/plugins/telegram/action", json={"action": "poll"})
         assert resp.status_code == 200
         assert resp.json()["count"] == 3
+
+    def test_poll_action_no_service(self, client, monkeypatch):
+        monkeypatch.setattr(
+            "ai_mini_box.core.services.registry.get_service",
+            lambda name: None,
+        )
+        resp = client.post("/api/plugins/telegram/action", json={"action": "poll"})
+        assert resp.status_code == 502
 
     def test_unknown_action(self, client):
         resp = client.post("/api/plugins/telegram/action", json={"action": "unknown"})

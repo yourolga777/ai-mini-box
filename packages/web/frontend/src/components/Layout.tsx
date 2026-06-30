@@ -1,14 +1,17 @@
 import { NavLink, Outlet } from "react-router-dom";
 
 const links = [
-  { to: "/", label: "Dashboard" },
-  { to: "/calendar", label: "Calendar" },
-  { to: "/contacts", label: "Contacts" },
-  { to: "/products", label: "Products" },
-  { to: "/messages", label: "Messages" },
-  { to: "/orders", label: "Orders" },
-  { to: "/plugins", label: "Plugins" },
-  { to: "/knowledge-base", label: "Knowledge Base" },
+  { to: "/", label: "Панель" },
+  { to: "/calendar", label: "Календарь" },
+  { to: "/contacts", label: "Контакты" },
+  { to: "/products", label: "Товары" },
+  { to: "/messages", label: "Сообщения" },
+  { to: "/orders", label: "Заказы" },
+  { to: "/plugins", label: "Плагины" },
+  { to: "/email", label: "Email" },
+  { to: "/settings/templates", label: "Шаблоны" },
+  { to: "/settings/business", label: "Бизнес" },
+  { to: "/knowledge-base", label: "База знаний" },
 ];
 
 export default function Layout() {
@@ -36,7 +39,7 @@ export default function Layout() {
               `px-3 py-2 rounded transition ${isActive ? "bg-blue-600" : "hover:bg-gray-700"}`
             }
           >
-            Help
+            Справка
           </NavLink>
         </div>
       </nav>

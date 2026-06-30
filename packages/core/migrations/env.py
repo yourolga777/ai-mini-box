@@ -17,6 +17,15 @@ if config.config_file_name is not None:
 
 from ai_mini_box.infrastructure.database import Base
 from ai_mini_box.infrastructure import orm_models  # noqa: F401 - populate Base.metadata
+
+try:
+    from ai_mini_box_llm import models as _llm_models  # noqa: F401 - populate Base.metadata
+except ImportError:
+    import logging
+    logging.getLogger("alembic").warning(
+        "llm_plugin not installed — LLM tables excluded from migration"
+    )
+
 target_metadata = Base.metadata
 
 

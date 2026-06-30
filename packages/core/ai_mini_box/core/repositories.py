@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from .models import Contact, KnowledgeBaseItem, Message, Order, Product, Task, Topic
+from .models import Contact, KnowledgeBaseItem, Message, Order, OrderItem, Product, Task, Topic
 
 
 class QueryBuilder:
@@ -133,6 +133,10 @@ class MessageRepo(ABC):
     def search(self, query: str, topic: Optional[str] = None) -> list[Message]:
         ...
 
+    @abstractmethod
+    def list_by_chat(self, chat_id: str, limit: int = 5) -> list[Message]:
+        ...
+
 
 class OrderRepo(ABC):
     @abstractmethod
@@ -153,6 +157,28 @@ class OrderRepo(ABC):
 
     @abstractmethod
     def update(self, order: Order) -> Order:
+        ...
+
+
+class OrderItemRepo(ABC):
+    @abstractmethod
+    def list_by_order(self, order_id: int) -> list[OrderItem]:
+        ...
+
+    @abstractmethod
+    def get_by_id(self, item_id: int) -> Optional[OrderItem]:
+        ...
+
+    @abstractmethod
+    def add(self, item: OrderItem) -> OrderItem:
+        ...
+
+    @abstractmethod
+    def update(self, item: OrderItem) -> OrderItem:
+        ...
+
+    @abstractmethod
+    def delete(self, item_id: int) -> None:
         ...
 
 

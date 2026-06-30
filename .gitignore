@@ -16,3 +16,5 @@ data/
 logs/
 deepseek_*.md
 backup-*
+tmp_add_column.py
+stop

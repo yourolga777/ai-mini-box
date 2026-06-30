@@ -2,14 +2,19 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from ai_mini_box.core.exceptions import NotFoundError
-from ai_mini_box.core.models import Order
-from ai_mini_box.core.repositories import OrderRepo, QueryBuilder
-from ai_mini_box.infrastructure.mapping import order_from_orm, order_to_orm
-from ai_mini_box.infrastructure.orm_models import OrderModel
+from ai_mini_box.core.models import Order, OrderItem
+from ai_mini_box.core.repositories import OrderItemRepo, OrderRepo, QueryBuilder
+from ai_mini_box.infrastructure.mapping import (
+    order_from_orm,
+    order_item_from_orm,
+    order_item_to_orm,
+    order_to_orm,
+)
+from ai_mini_box.infrastructure.orm_models import OrderItemModel, OrderModel
 
 
 class SqliteOrderRepo(OrderRepo):
@@ -51,3 +56,55 @@ class SqliteOrderRepo(OrderRepo):
         self.session.flush()
         self.session.refresh(orm_obj)
         return order_from_orm(orm_obj)
+
+
+class SqliteOrderItemRepo(OrderItemRepo):
+    def __init__(self, session: Session):
+        self.session = session
+
+    def _recalc_total(self, order_id: int) -> None:
+        total = self.session.execute(
+            select(func.sum(OrderItemModel.quantity * OrderItemModel.price_kopecks))
+            .where(OrderItemModel.order_id == order_id)
+        ).scalar() or 0
+        self.session.execute(
+            update(OrderModel).where(OrderModel.id == order_id)
+            .values(total_kopecks=total)
+        )
+
+    def list_by_order(self, order_id: int) -> list[OrderItem]:
+        stmt = select(OrderItemModel).where(OrderItemModel.order_id == order_id)
+        rows = self.session.execute(stmt).scalars().all()
+        return [order_item_from_orm(r) for r in rows]
+
+    def get_by_id(self, item_id: int) -> Optional[OrderItem]:
+        row = self.session.get(OrderItemModel, item_id)
+        return order_item_from_orm(row) if row else None
+
+    def add(self, item: OrderItem) -> OrderItem:
+        row = order_item_to_orm(item)
+        self.session.add(row)
+        self.session.flush()
+        self.session.refresh(row)
+        self._recalc_total(item.order_id)
+        return order_item_from_orm(row)
+
+    def update(self, item: OrderItem) -> OrderItem:
+        row = self.session.get(OrderItemModel, item.id)
+        if not row:
+            raise NotFoundError("OrderItem", item.id)
+        for field, value in item.model_dump(exclude_unset=True).items():
+            setattr(row, field, value)
+        self.session.flush()
+        self.session.refresh(row)
+        self._recalc_total(item.order_id)
+        return order_item_from_orm(row)
+
+    def delete(self, item_id: int) -> None:
+        row = self.session.get(OrderItemModel, item_id)
+        if not row:
+            raise NotFoundError("OrderItem", item_id)
+        order_id = row.order_id
+        self.session.delete(row)
+        self.session.flush()
+        self._recalc_total(order_id)

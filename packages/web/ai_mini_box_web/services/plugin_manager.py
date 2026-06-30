@@ -5,14 +5,17 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
+from cryptography.fernet import Fernet
 from loguru import logger
 
-from ai_mini_box.infrastructure.config import JsonConfigManager, SENSITIVE_FIELDS
+from ai_mini_box.infrastructure.config import JsonConfigManager, SENSITIVE_FIELDS, _derive_key
 
 PACKAGE_RE = re.compile(r"^ai[-_]mini[-_]box[-_]", re.IGNORECASE)
+PLUGIN_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 PROTECTED_PLUGINS = frozenset({"core", "web"})
 
 
@@ -21,6 +24,7 @@ class PluginManager:
         self._log_dir = Path("logs")
         self._log_dir.mkdir(parents=True, exist_ok=True)
         self._daemon_pids: dict[str, int] = {}
+        self._config_lock = threading.Lock()
         self._load_daemon_pids()
 
     # --- discovery ---
@@ -88,6 +92,18 @@ class PluginManager:
         self._invalidate()
         return {"success": result.returncode == 0, "output": result.stdout + result.stderr}
 
+    def update_plugin(self, name: str) -> dict:
+        pip_name = f"ai-mini-box-{name}"
+        cmd = self._pip_install_args() + ["--upgrade", pip_name]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            return {"success": False, "output": "Update timed out after 120 seconds"}
+        except Exception as e:
+            return {"success": False, "output": str(e)}
+        self._invalidate()
+        return {"success": result.returncode == 0, "output": result.stdout + result.stderr}
+
     def uninstall(self, package: str) -> dict:
         cmd = [sys.executable, "-m", "pip", "uninstall", "-y", package]
         logger.info("Running: {}", " ".join(cmd))
@@ -119,6 +135,7 @@ class PluginManager:
         try:
             proc = subprocess.Popen(
                 cmd,
+                stdin=subprocess.DEVNULL,
                 stdout=open(log_path, "a", encoding="utf-8"),
                 stderr=subprocess.STDOUT,
                 startupinfo=startupinfo,
@@ -159,6 +176,8 @@ class PluginManager:
 
     # --- config ---
 
+    _CONFIG_PATH = Path("data/config.json")
+
     def get_config(self) -> dict:
         config = JsonConfigManager().load()
         data = config.model_dump()
@@ -175,6 +194,54 @@ class PluginManager:
         except (ValueError, Exception) as e:
             return {"success": False, "error": str(e)}
 
+    def get_plugin_config(self, name: str) -> dict | None:
+        try:
+            from ai_mini_box.core.services.config_provider import get_config_provider
+            provider = get_config_provider(name)
+            if provider is not None:
+                return provider.get_config()
+        except Exception:
+            pass
+        if not self._CONFIG_PATH.exists():
+            return None
+        raw = json.loads(self._CONFIG_PATH.read_text(encoding="utf-8"))
+        cfg = raw.get(name)
+        if cfg and "email_password" in cfg:
+            cfg = {**cfg, "email_password": "***"}
+        return cfg
+
+    def set_plugin_config(self, name: str, config: dict) -> dict:
+        if not PLUGIN_NAME_RE.match(name):
+            return {"success": False, "error": f"Invalid plugin name: {name}"}
+        try:
+            from ai_mini_box.core.services.config_provider import get_config_provider
+            provider = get_config_provider(name)
+            if provider is not None:
+                return provider.set_config(config)
+        except Exception:
+            pass
+        with self._config_lock:
+            self._CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            raw = {}
+            if self._CONFIG_PATH.exists():
+                raw = json.loads(self._CONFIG_PATH.read_text(encoding="utf-8"))
+            existing = raw.get(name, {})
+            existing.update(config)
+            password = config.get("email_password", "")
+            if not password and existing.get("email_password"):
+                password = existing["email_password"]
+            raw[name] = existing
+            if name == "email" and password:
+                secret = os.environ.get("AI_BOX_SECRET", "default-dev-secret")
+                salt = b"ai-mini-box-salt"
+                key = _derive_key(secret, salt)
+                fernet = Fernet(key)
+                raw[name]["email_password"] = fernet.encrypt(password.encode()).decode()
+            tmp = self._CONFIG_PATH.with_suffix(".tmp")
+            tmp.write_text(json.dumps(raw, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+            os.replace(tmp, self._CONFIG_PATH)
+        return {"success": True}
+
     # --- helpers ---
 
     def _is_running(self, pid: int) -> bool:
@@ -184,7 +251,7 @@ class PluginManager:
                     ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
                     capture_output=True, text=True, timeout=5,
                 )
-                return str(pid) in result.stdout
+                return bool(result.stdout) and str(pid) in result.stdout
             else:
                 os.kill(pid, 0)
                 return True

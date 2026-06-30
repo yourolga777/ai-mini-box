@@ -69,6 +69,26 @@ dependencies = [
 - [ ] Help sections updated in `help/` directory
 - [ ] Built and tested locally: `pip install dist/*.whl`
 
+## Catalog registration
+
+After publishing, register your plugin in the core catalog so users see it in `ai-mini-box plugin catalog`:
+
+1. Edit `packages/core/ai_mini_box/data/plugin-catalog.json` in the core repo
+2. Add your entry following the existing format:
+   ```json
+   {
+     "name": "weather",
+     "title": "Weather",
+     "description": "Прогноз погоды и уведомления о непогоде",
+     "package": "ai-mini-box-weather",
+     "min_core": "5.0.0",
+     "url": "https://github.com/your-org/ai-mini-box-weather"
+   }
+   ```
+3. Open a PR to the core repository with this change
+
+The `name` must match your entry point name. The `package` must match your PyPI package name.
+
 ## Package naming
 
 | Type | Package name | Entry point name |

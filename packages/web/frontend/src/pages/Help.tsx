@@ -105,15 +105,15 @@ export default function Help() {
     queryFn: () => fetch("/api/help").then((r) => r.json()),
   });
 
-  if (isLoading) return <p className="text-gray-500">Loading help...</p>;
+  if (isLoading) return <p className="text-gray-500">Загрузка справки…</p>;
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold mb-6">Help</h1>
+      <h1 className="text-2xl font-bold mb-6">Справка</h1>
 
       <div className="flex gap-8">
         <nav className="w-48 shrink-0 space-y-1 sticky top-4 self-start">
-          <p className="text-xs text-gray-400 uppercase mb-2">Sections</p>
+          <p className="text-xs text-gray-400 uppercase mb-2">Разделы</p>
           {(data ?? []).map((s) => (
             <a
               key={s.id}

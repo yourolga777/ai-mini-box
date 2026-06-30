@@ -52,6 +52,11 @@ class FakeUpdate:
 
 
 class TestProcessUpdate:
+    @pytest.fixture(autouse=True)
+    def _no_llm(self, mocker):
+        """Old tests test the legacy path — mock LLM pipeline as unavailable."""
+        mocker.patch("ai_mini_box_telegram.handlers.get_service", return_value=None)
+
     def test_creates_message_and_contact(self, mock_repos, mocker):
         contact_repo, message_repo = mock_repos
         session = mocker.Mock()
@@ -64,7 +69,7 @@ class TestProcessUpdate:
         assert messages[0].text == "Hello"
         assert messages[0].source == MessageSource.TELEGRAM
         assert messages[0].chat_id == "123"
-        assert messages[0].topic == Topic.OTHER
+        assert messages[0].topic is None
 
         contacts = contact_repo.list()
         assert len(contacts) == 1

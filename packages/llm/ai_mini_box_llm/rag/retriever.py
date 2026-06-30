@@ -1,73 +1,65 @@
 from __future__ import annotations
 
-from typing import Optional
+import shutil
+from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
-from ai_mini_box.core.container import RepoContainer
-from ai_mini_box.core.models import KnowledgeBaseItem
-from ai_mini_box.infrastructure.database import get_db
-
-from ..prompt import RAG_CONTEXT_TEMPLATE
-from ..providers.base import BaseLLMProvider
-from .embeddings import get_embedding
-from .vector_store import VectorStore
+from .embeddings import EmbeddingModel
+from .vector_store import FaissVectorStore
 
 
-def rebuild_index(provider: BaseLLMProvider, index_path: str = "data/llm_rag_index.json") -> int:
-    """Reindex all KnowledgeBase items from the database."""
-    store = VectorStore(index_path)
-    store.entries = []
+class Retriever:
+    def __init__(self, embed_model: EmbeddingModel, store: FaissVectorStore):
+        self._embed = embed_model
+        self._store = store
 
-    with get_db() as session:
-        repos = RepoContainer(session)
-        all_items = repos.kb.list()
-        if not all_items:
-            logger.info("No KB items to index")
-            store.save()
+    @property
+    def available(self) -> bool:
+        return self._embed.available and self._store.available
+
+    def retrieve(self, text: str, top_k: int = 3) -> list[tuple[str, float, dict[str, Any]]]:
+        if not self.available or not text.strip():
+            return []
+        vec = self._embed.embed(text)
+        if not vec:
+            return []
+        return self._store.search(vec, top_k=top_k)
+
+    def add_successful_reply(self, question: str, answer: str, category: str) -> None:
+        if not self.available:
+            return
+        vec = self._embed.embed(question)
+        if not vec:
+            return
+        self._store.add(question, vec, {"answer": answer, "category": category})
+        logger.info("RAG: added successful reply for '{}'", question[:60])
+
+    def rebuild_index(self, texts: list[str], metadatas: list[dict[str, Any]]) -> int:
+        if not self.available or not texts:
             return 0
-
-        texts = [item.answer_text for item in all_items]
-        logger.info("Generating embeddings for {} KB items...", len(texts))
-
-        for item in all_items:
-            embedding = get_embedding(provider, item.answer_text)
-            store.add({
-                "kb_id": item.id,
-                "topic": item.topic.value if item.topic else None,
-                "question_keywords": item.question_keywords,
-                "answer_text": item.answer_text,
-                "embedding": embedding,
-            })
-
-    store.save()
-    logger.info("Index saved with {} entries", len(store.entries))
-    return len(store.entries)
-
-
-def retrieve_context(
-    provider: BaseLLMProvider,
-    text: str,
-    top_k: int = 3,
-    index_path: str = "data/llm_rag_index.json",
-) -> str:
-    """Retrieve relevant KB context for a given text."""
-    store = VectorStore(index_path)
-    store.load()
-
-    if not store.entries:
-        return ""
-
-    query_vec = get_embedding(provider, text)
-    if not query_vec:
-        return ""
-
-    results = store.search(query_vec, top_k=top_k)
-    if not results:
-        return ""
-
-    context_parts = []
-    for i, entry in enumerate(results, 1):
-        context_parts.append(f"{i}. {entry['answer_text']}")
-
-    return RAG_CONTEXT_TEMPLATE.format(context="\n".join(context_parts))
+        main_path = Path(self._store._index_path)
+        tmp_faiss = main_path.parent / f"{main_path.name}.tmp"
+        new_store = FaissVectorStore(dim=self._store._dim, index_path=str(tmp_faiss))
+        count = 0
+        for text, meta in zip(texts, metadatas or []):
+            vec = self._embed.embed(text)
+            if vec:
+                new_store.add(text, vec, meta)
+                count += 1
+        if count == 0:
+            Path(tmp_faiss).unlink(missing_ok=True)
+            Path(str(tmp_faiss) + ".json").unlink(missing_ok=True)
+            return 0
+        new_store.save()
+        shutil.move(str(tmp_faiss), str(main_path))
+        tmp_meta = str(tmp_faiss) + ".json"
+        main_meta = str(main_path) + ".json"
+        if Path(tmp_meta).exists():
+            shutil.move(tmp_meta, main_meta)
+        del new_store
+        self._store = FaissVectorStore(dim=self._store._dim, index_path=str(main_path))
+        self._store.load()
+        logger.info("RAG index rebuilt via COW: {} entries", count)
+        return count

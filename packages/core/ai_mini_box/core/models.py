@@ -66,7 +66,14 @@ class Message(BaseModel):
     sent_response: bool = False
     extracted_phone: Optional[str] = None
     extracted_name: Optional[str] = None
+    extracted_order_id: Optional[int] = None
     received_at: datetime = Field(default_factory=datetime.now)
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    need_human: bool = False
+    auto_replied: bool = False
+    auto_reply_text: Optional[str] = None
+    operator_context: Optional[str] = None
 
 
 class TaskPriority(str, Enum):
@@ -98,6 +105,26 @@ class Order(BaseModel):
     source_message_id: Optional[int] = None
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class OrderItem(BaseModel):
+    id: Optional[int] = None
+    order_id: int
+    product_id: Optional[int] = None
+    product_name: str
+    quantity: int = 1
+    price_kopecks: int = 0
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
+class BusinessConfig(BaseModel):
+    company_name: str = "Название компании"
+    work_hours: str = "Пн-Пт 9:00-18:00"
+    delivery_info: str = "Условия доставки"
+    return_policy: str = "Условия возврата"
+    payment_methods: str = "Способы оплаты"
+    contacts: str = "Контакты"
+    faq: list[dict] = Field(default_factory=list)
 
 
 class KnowledgeBaseItem(BaseModel):

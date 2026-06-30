@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -63,9 +63,16 @@ class MessageModel(Base):
     sent_response: Mapped[bool] = mapped_column(Boolean, default=False)
     extracted_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     extracted_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    extracted_order_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("orders.id"), nullable=True)
     received_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now()
     )
+    category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    subcategory: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    need_human: Mapped[bool] = mapped_column(Boolean, server_default="0")
+    auto_replied: Mapped[bool] = mapped_column(Boolean, server_default="0")
+    auto_reply_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    operator_context: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class TaskModel(Base):
@@ -107,6 +114,18 @@ class OrderModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+class OrderItemModel(Base):
+    __tablename__ = "order_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[int] = mapped_column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
+    product_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("products.id"), nullable=True)
+    product_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    price_kopecks: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 class KnowledgeBaseModel(Base):

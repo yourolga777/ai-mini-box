@@ -5,11 +5,25 @@
 В проекте две роли. Выбери свою:
 
 | Ты | Читать |
-|---|---|
-| Разрабатываешь **плагин** (LLM, Telegram, WhatsApp...) | → `plugin-developer-prompt.md` |
+|---|---|---|
+| Анализируешь **архитектуру и проблемы** | → `analyst-prompt.md`, ТЗ в `specs/` |
+| Разрабатываешь **фронтенд** (React) | → `00-frontend-spec.md` |
+| Разрабатываешь **бекенд** (web, core) | → `01-backend-spec.md` |
+| Разрабатываешь **LLM-плагин** | → `02-llm-spec.md` |
+| Разрабатываешь **Telegram-плагин** | → `03-telegram-spec.md` |
+| Разрабатываешь **другой плагин** | → `plugin-developer-prompt.md` |
 | Разрабатываешь **каркас** (core) | → `core-developer-prompt.md` |
 
 ## Документация
+
+### ТЗ для разработчиков
+
+| Файл | Для кого |
+|---|---|
+| `specs/00-frontend-spec.md` | Фронтенд-разработчик (React) |
+| `specs/01-backend-spec.md` | Бекенд-разработчик (web API, core) |
+| `specs/02-llm-spec.md` | LLM-разработчик |
+| `specs/03-telegram-spec.md` | Telegram-разработчик |
 
 ### Для плагинов
 

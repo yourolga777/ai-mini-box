@@ -55,7 +55,7 @@ export default function InstallModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded shadow-xl w-full max-w-lg p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold">Install Plugin</h2>
+          <h2 className="text-lg font-bold">Установка плагина</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
         </div>
 
@@ -64,19 +64,19 @@ export default function InstallModal({ onClose }: { onClose: () => void }) {
             className={`px-3 py-1 rounded-t text-sm font-medium ${tab === "pypi" ? "bg-blue-600 text-white" : "text-gray-500 hover:text-gray-700"}`}
             onClick={() => setTab("pypi")}
           >
-            From PyPI
+            Из PyPI
           </button>
           <button
             className={`px-3 py-1 rounded-t text-sm font-medium ${tab === "upload" ? "bg-blue-600 text-white" : "text-gray-500 hover:text-gray-700"}`}
             onClick={() => setTab("upload")}
           >
-            Upload .whl
+            Загрузить .whl
           </button>
         </div>
 
         {tab === "pypi" && (
           <div className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">Package name</label>
+            <label className="block text-sm font-medium text-gray-700">Название пакета</label>
             <input
               className="w-full border rounded px-3 py-2 text-sm"
               placeholder="ai-mini-box-telegram"
@@ -89,14 +89,14 @@ export default function InstallModal({ onClose }: { onClose: () => void }) {
               disabled={!pkg.trim() || status === "installing"}
               onClick={installPypi}
             >
-              {status === "installing" ? "Installing..." : "Install"}
+              {status === "installing" ? "Установка..." : "Установить"}
             </button>
           </div>
         )}
 
         {tab === "upload" && (
           <div className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">Wheel file (.whl)</label>
+            <label className="block text-sm font-medium text-gray-700">Wheel-файл (.whl)</label>
             <input
               type="file"
               accept=".whl"
@@ -109,7 +109,7 @@ export default function InstallModal({ onClose }: { onClose: () => void }) {
               disabled={!file || status === "installing"}
               onClick={installUpload}
             >
-              {status === "installing" ? "Uploading..." : "Upload & Install"}
+              {status === "installing" ? "Загрузка..." : "Загрузить и установить"}
             </button>
           </div>
         )}
@@ -117,7 +117,7 @@ export default function InstallModal({ onClose }: { onClose: () => void }) {
         {status === "installing" && (
           <div className="mt-4 flex items-center gap-2 text-sm text-gray-600">
             <span className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            Installing...
+            Установка...
           </div>
         )}
 
@@ -135,7 +135,7 @@ export default function InstallModal({ onClose }: { onClose: () => void }) {
 
         {status === "success" && (
           <div className="mt-3 text-sm text-green-600 font-medium">
-            Installed successfully! Reloading server...
+            Установлено! Перезагрузка сервера...
           </div>
         )}
       </div>

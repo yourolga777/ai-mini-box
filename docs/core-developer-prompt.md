@@ -53,7 +53,8 @@ packages/core/ai_mini_box/
 │   ├── answer_service.py         # auto_draft_response()
 │   └── services/                 # Service Registry
 │       ├── registry.py           # register_service() / get_service()
-│       └── llm.py                # LlmService ABC + NullLlmService
+│       ├── llm.py                # LlmService ABC + NullLlmService
+│       └── plugin_catalog.py     # PluginCatalog — каталог + синк + статус
 │
 ├── infrastructure/               # ★ Реализации
 │   ├── database.py               # engine, sessionmaker, get_db(), get_db_path()
@@ -281,7 +282,8 @@ SENSITIVE_FIELDS = frozenset({
 ## CLI (cli.py) — ключевые паттерны
 
 - `@app.callback()` — глобальные опции (`--verbose`, `--log-file`)
-- `config_app = typer.Typer(help="...")` + `app.add_typer(config_app, name="config")` — подгруппы
+- `config_app / db_app / plugin_app = typer.Typer(help="...")` + `app.add_typer(..., name="...")` — подгруппы
+- `plugin_app` команды: `catalog` (статус всех плагинов) и `refresh` (синк каталога)
 - `_run_migrations()` — вынесена для reuse в `init` и `upgrade`
 - **Плагины** загружаются в конце файла через `entry_points(group="ai_mini_box.tools")`
 - не добавлять команды в core, если они специфичны для одного плагина
@@ -300,6 +302,25 @@ svc = get_service("my_service")
 
 Новый сервисный контракт — ABC в `core/services/` + Null-реализация.
 
+## Plugin Catalog
+
+`PluginCatalog` управляет списком доступных плагинов:
+
+```python
+from ai_mini_box.core.services.plugin_catalog import PluginCatalog
+
+catalog = PluginCatalog()
+catalog.sync()                       # sync builtin → data/ (merge)
+entries = catalog.load()             # data/ → fallback builtin
+status = catalog.get_status()        # catalog + installed status
+```
+
+- Builtin-каталог: `ai_mini_box/data/plugin-catalog.json` (поставляется с pip)
+- Кеш: `data/plugin-catalog.json` (на уровне приложения)
+- `sync()` мержит builtin + кастомные записи с уникальными именами
+- `init` вызывает `sync()` автоматически
+- Добавить плагин в каталог → PR в `data/plugin-catalog.json`
+
 ## Что нельзя делать
 
 1. **Менять сигнатуры ABC репозиториев** — это ломает все плагины. Только добавить новый метод.
@@ -307,6 +328,7 @@ svc = get_service("my_service")
 3. **Добавлять зависимости в core** — каждая новая зависимость увеличивает размер установки. Только критическое.
 4. **Ломать `get_db()` / `RepoContainer`** — основа DI для всех плагинов.
 5. **Менять entry point groups** — `ai_mini_box.tools`, `ai_mini_box.help`, `ai_mini_box.llm`, `ai_mini_box.services` — контракт для всех плагинов.
+6. **Вопросы — одним списком, не popup.** Не задавай вопросы через OpenCode-окна. Когда есть неоднозначность — собери **все** вопросы в конец ответа списком, чтобы пользователь скопировал и отдал одной порцией.
 
 ## Процесс разработки
 
@@ -323,6 +345,18 @@ svc = get_service("my_service")
 - minor — новое поле/модель/репозиторий, миграция
 - patch — баг-фиксы, документация
 ```
+
+## TAUSIK Workflow
+
+Этот проект использует TAUSIK для управления задачами. Обязательные шаги:
+
+1. **`task start <slug>`** — перед любым изменением кода. Создаёт задачу с goal + acceptance_criteria.
+2. **`task log <slug> "message"`** — логировать каждый осмысленный шаг.
+3. **`dead-end "approach" "reason"`** — документировать тупиковые подходы.
+4. **`tausik verify --task <slug>`** — перед завершением задачи (запускает тяжелые gates).
+5. **`task done <slug> --ac-verified`** — закрытие задачи после зелёного verify.
+
+TAUSIK-роль: `core-developer`. Создавай задачи с `--role core-developer --stack python`.
 
 ## Чек-лист перед коммитом
 

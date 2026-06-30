@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Optional
 
-from ai_mini_box.core.models import Contact, KnowledgeBaseItem, Message, Order, Product, Topic
+from ai_mini_box.core.models import Contact, KnowledgeBaseItem, Message, Order, OrderItem, Product, Topic
 from ai_mini_box.core.repositories import (
     ContactRepo,
     KnowledgeBaseRepo,
     MessageRepo,
+    OrderItemRepo,
     OrderRepo,
     ProductRepo,
     QueryBuilder,
@@ -123,6 +124,9 @@ class MockMessageRepo(MessageRepo):
             results = [m for m in results if m.topic and m.topic.value == topic]
         return results
 
+    def list_by_chat(self, chat_id: str, limit: int = 5) -> list[Message]:
+        return self._store.query().filter(chat_id=chat_id).limit(limit).all()
+
 
 class MockOrderRepo(OrderRepo):
     def __init__(self):
@@ -143,6 +147,26 @@ class MockOrderRepo(OrderRepo):
 
     def update(self, order: Order) -> Order:
         return self._store.update(order)
+
+
+class MockOrderItemRepo(OrderItemRepo):
+    def __init__(self):
+        self._store = _MemoryStore()
+
+    def list_by_order(self, order_id: int) -> list[OrderItem]:
+        return [i for i in self._store.query().all() if i.order_id == order_id]
+
+    def get_by_id(self, item_id: int) -> Optional[OrderItem]:
+        return self._store.get(item_id)
+
+    def add(self, item: OrderItem) -> OrderItem:
+        return self._store.add(item)
+
+    def update(self, item: OrderItem) -> OrderItem:
+        return self._store.update(item)
+
+    def delete(self, item_id: int) -> None:
+        self._store.delete(item_id)
 
 
 class MockKnowledgeBaseRepo(KnowledgeBaseRepo):

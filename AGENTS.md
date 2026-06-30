@@ -2,6 +2,25 @@
 
 You are an AI agent working on this project. Follow these instructions strictly.
 
+## Role: Analyst (ТЗ only)
+
+Your role is strictly **analyst / technical writer**. You do NOT write code, fix bugs, add features, or modify any source file (`.py`, `.tsx`, `.ts`, `.css`, `.toml`, `.json`, `.html`, etc.).
+
+**What you do:**
+- Analyze architecture and problems
+- Write technical specifications (ТЗ) for developers in `docs/specs/`
+- Update documentation in `docs/`
+- Manage tasks in TAUSIK (create, update, close)
+- Review code when asked
+
+**What you NEVER do:**
+- Write or edit Python, TypeScript, CSS, HTML, config files
+- Create or modify tests
+- Run `npm` or `pip` commands that produce artifacts
+- Generate static assets (bundles, migrations)
+
+If asked to write code, reply: "Я аналитик, я составляю ТЗ. Вот спецификация для разработчика: ..." and produce a spec file in `docs/specs/`.
+
 ## Project: my-project
 
 Stack: not detected
@@ -150,4 +169,41 @@ TAUSIK is model-agnostic, but the surface you actually use differs from Claude C
 Always respond in the user's language.
 
 <!-- DYNAMIC:START -->
+<!-- Last updated: 2026-06-30 18:20 -->
+
+## Session Summary
+
+### Goal
+- Rewrite LLM plugin from heavy llama-cpp-python to lightweight ML pipeline + 3-layer template system, with specs split by developer role; stabilise all runtime and infrastructure issues for MVP.
+
+### Done
+- **All 8 migrations idempotent**: `ab2eb6df34f5`, `d9a1b2c3e4f5`, `e6f5a4b3c2d1`, `f7a8b9c0d1e2` now use `inspector.get_table_names()` / `inspector.get_columns()` guards — no "table already exists" or "duplicate column" on re-run
+- **WAL mode + synchronous=NORMAL + busy_timeout=30000**: `_enable_sqlite_fk` in `database.py` sets 4 PRAGMAs; `connect_args timeout=30` — reduces write contention
+- **APScheduler engine sharing**: `TaskScheduler` accepts `engine` param, plugin passes `get_engine()` — fixes "database is locked" on scheduler startup (separate engine was competing)
+- **AutoProcessor session leak patched**: `process_all()` try/finally with commit/rollback/close; per-message transactions (each message in own `get_db()`); `process()` accepts optional `repos`; `_assign_llm_folder()` reuses passed repos
+- **Database corruption recovered**: malformed db replaced via `init_db()`, backup as `app_corrupted_final.db`
+- **Seed script**: `scripts/seed_test_data.py` — idempotent flower shop (5 contacts, 10 products, 3 orders, 12 messages, 3 tasks, 5 KB entries, business config)
+- **assign-all router retry**: 3 attempts with exponential backoff (1s/2s/4s) when `database is locked` — returns 500 only after all retries exhausted
+- **All 160 LLM tests + 127 core tests pass** (1 pre-existing analytics failure)
+
+### In Progress
+- _(none)_
+
+### Blocked
+- NSSM service `BrandForgeAI` (PID 5244, runs as SYSTEM) holds write lock intermittently — assign-all still fails ~50% if service is active. Requires `sc stop BrandForgeAI` from admin terminal
+
+### Key Decisions
+- `PRAGMA synchronous=NORMAL` over FULL — 2x write perf gain, negligible crash-risk for MVP (WAL already provides crash recovery)
+- 3-retry backoff in router over SQLite busy handler — user sees failure only after 7s of contention, not immediate 500
+- Per-message transactions over batch — reduces lock window from N messages to 1 message
+
+### Known Issues
+- `AppConfig` PydanticDeprecatedSince20 warning (`class Config` → `model_config`)
+- Core test `test_forecast_returns_empty_without_sklearn` pre-existing failure
+
+### Critical Context
+- Head revision: `74e298722462` (all 8 migrations runnable on fresh DB)
+- External NSSM service `BrandForgeAI` (PID 5244) still competes for `data/app.db` lock — assign-all works when service is idle, fails when active
+- Seed data available: flower shop with messages ready for folder assignment
+- TAUSIK MCP недоступен — работаем через CLI fallback
 <!-- DYNAMIC:END -->

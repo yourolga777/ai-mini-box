@@ -7,29 +7,23 @@ from ai_mini_box.core.services.registry import get_service, register_service
 
 
 def test_register_creates_service():
-    """Verify that after register(), get_service('llm') returns a service."""
+    """Verify that after register(), get_service('llm') returns a Pipeline."""
     from ai_mini_box_llm.plugin import register
 
     register_service("llm", None)  # clean slate
     app = typer.Typer()
-    with patch("ai_mini_box_llm.plugin.LlmConfig.load") as mock_load:
-        mock_config = mock_load.return_value
-        mock_config.provider = "local"
-        mock_config.model_path = "/dev/null/test.gguf"
-        mock_config.n_ctx = 512
-        mock_config.n_threads = 1
-        mock_config.rag_enabled = False
-        mock_config.rag_top_k = 3
-        mock_config.rag_index_path = "data/llm_rag_index.json"
 
-        with patch("ai_mini_box_llm.service._create_provider"):
-            register(app)
+    with (
+        patch("ai_mini_box_llm.plugin._seed_system_categories"),
+        patch("ai_mini_box_llm.plugin._init_pipeline") as mock_init,
+    ):
+        mock_pipeline = mock_init.return_value
+        register(app)
 
     svc = get_service("llm")
     assert svc is not None
-    assert hasattr(svc, "classify")
-    assert hasattr(svc, "draft_response")
-    assert hasattr(svc, "extract_entities")
+    assert hasattr(svc, "process")
+    assert svc is mock_pipeline
 
 
 def test_register_adds_typer_commands():
@@ -38,9 +32,12 @@ def test_register_adds_typer_commands():
 
     register_service("llm", None)  # clean slate
     app = typer.Typer()
-    with patch("ai_mini_box_llm.plugin.LlmConfig.load"):
-        with patch("ai_mini_box_llm.plugin.LlmServiceImpl"):
-            register(app)
+    with (
+        patch("ai_mini_box_llm.plugin._seed_system_categories"),
+        patch("ai_mini_box_llm.plugin._init_pipeline") as mock_init,
+    ):
+        mock_init.return_value = object()
+        register(app)
 
     runner = CliRunner()
     result = runner.invoke(app, ["--help"])
@@ -48,17 +45,74 @@ def test_register_adds_typer_commands():
 
 
 def test_register_handles_config_error_gracefully():
-    """If config loading fails, plugin should not crash, just skip."""
+    """If pipeline init fails, plugin should not crash, just skip."""
     from ai_mini_box_llm.plugin import register
 
     register_service("llm", None)  # clean slate
 
     app = typer.Typer()
-    with patch("ai_mini_box_llm.plugin.LlmConfig.load", side_effect=Exception("config error")):
+    with (
+        patch("ai_mini_box_llm.plugin._seed_system_categories"),
+        patch("ai_mini_box_llm.plugin._init_pipeline", side_effect=Exception("init error")),
+    ):
         register(app)
 
     svc = get_service("llm")
-    assert svc is None  # service was NOT registered
+    assert svc is None  # pipeline was NOT registered
+
+
+def test_assign_all_no_llm_shows_message():
+    """assign-all without LLM prints 'LLM pipeline not configured'."""
+    from ai_mini_box_llm.plugin import register
+
+    register_service("llm", None)
+    register_service("auto_processor", None)
+    app = typer.Typer()
+    with (
+        patch("ai_mini_box_llm.plugin._seed_system_categories"),
+        patch("ai_mini_box_llm.plugin._init_pipeline", side_effect=Exception("no pipeline")),
+    ):
+        register(app)
+        runner = CliRunner()
+        result = runner.invoke(app, ["llm", "assign-all"])
+    assert "LLM pipeline not configured" in result.output
+    assert result.exit_code == 0
+
+
+def test_process_daemon_help_shown():
+    """process-daemon appears in llm help."""
+    from ai_mini_box_llm.plugin import register
+
+    register_service("llm", None)
+    app = typer.Typer()
+    with (
+        patch("ai_mini_box_llm.plugin._seed_system_categories"),
+        patch("ai_mini_box_llm.plugin._init_pipeline") as mock_init,
+    ):
+        mock_init.return_value = object()
+        register(app)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["llm", "--help"])
+    assert "process-daemon" in result.output
+
+
+def test_assign_all_help_shown():
+    """assign-all appears in llm help."""
+    from ai_mini_box_llm.plugin import register
+
+    register_service("llm", None)
+    app = typer.Typer()
+    with (
+        patch("ai_mini_box_llm.plugin._seed_system_categories"),
+        patch("ai_mini_box_llm.plugin._init_pipeline") as mock_init,
+    ):
+        mock_init.return_value = object()
+        register(app)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["llm", "--help"])
+    assert "assign-all" in result.output
 
 
 def test_register_recovers_previous_registration():
@@ -69,20 +123,16 @@ def test_register_recovers_previous_registration():
     assert get_service("llm") is None
 
     app = typer.Typer()
-    with patch("ai_mini_box_llm.plugin.LlmConfig.load") as mock_load:
-        mock_cfg = mock_load.return_value
-        mock_cfg.provider = "local"
-        mock_cfg.model_path = "/dev/null/test.gguf"
-        mock_cfg.n_ctx = 512
-        mock_cfg.n_threads = 1
-        mock_cfg.rag_enabled = False
-        mock_cfg.rag_top_k = 3
-        mock_cfg.rag_index_path = "data/llm_rag_index.json"
-        with patch("ai_mini_box_llm.service._create_provider"):
-            register(app)
+    with (
+        patch("ai_mini_box_llm.plugin._seed_system_categories"),
+        patch("ai_mini_box_llm.plugin._init_pipeline") as mock_init,
+    ):
+        mock_pipeline = mock_init.return_value
+        register(app)
 
     svc = get_service("llm")
     assert svc is not None
+    assert svc is mock_pipeline
 
     svc2 = get_service("llm")
     assert svc2 is svc

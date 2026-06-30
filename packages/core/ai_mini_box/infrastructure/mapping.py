@@ -1,10 +1,11 @@
 import json
 
-from ai_mini_box.core.models import Contact, KnowledgeBaseItem, Message, Order, Product, Task
+from ai_mini_box.core.models import Contact, KnowledgeBaseItem, Message, Order, OrderItem, Product, Task
 from ai_mini_box.infrastructure.orm_models import (
     ContactModel,
     KnowledgeBaseModel,
     MessageModel,
+    OrderItemModel,
     OrderModel,
     ProductModel,
     TaskModel,
@@ -49,6 +50,14 @@ def task_from_orm(orm_obj: TaskModel) -> Task:
 
 def order_from_orm(orm_obj: OrderModel) -> Order:
     return Order.model_validate(orm_obj, from_attributes=True)
+
+
+def order_item_to_orm(item: OrderItem) -> OrderItemModel:
+    return OrderItemModel(**item.model_dump(exclude_unset=True))
+
+
+def order_item_from_orm(row: OrderItemModel) -> OrderItem:
+    return OrderItem.model_validate(row, from_attributes=True)
 
 
 def kb_item_to_orm(item: KnowledgeBaseItem) -> KnowledgeBaseModel:

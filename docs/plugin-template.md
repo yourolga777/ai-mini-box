@@ -11,6 +11,7 @@ ai-mini-box-{name}/
 │   ├── __init__.py
 │   ├── commands.py          # register(app) + CLI команды
 │   ├── core.py              # бизнес-логика (опционально)
+│   ├── config_provider.py   # ConfigProvider для веб-интерфейса (опционально)
 │   └── help/                # help-секции для web UI (опционально)
 └── tests/
     ├── test_commands.py
@@ -23,6 +24,7 @@ ai-mini-box-{name}/
 - Имя: `ai-mini-box-{name}`
 - Зависимость: `"ai-mini-box-core>=5.0.0"`
 - Entry point: `[project.entry-points."ai_mini_box.tools"]` → `{name} = "...commands:register"`
+- ConfigProvider (если нужен веб-доступ): `[project.entry-points."ai_mini_box.config_provider"]` → `{name} = "...config_provider:config_provider"`
 
 Подробнее: `01-package-setup.md`
 
@@ -68,10 +70,20 @@ register_service("{name}", MyServiceImpl())
 
 Подробнее: `10-service-registry.md`
 
+## ConfigProvider
+
+Если плагин имеет настройки, которые должны быть видны/редактируемы через веб-интерфейс:
+
+1. Реализуй `ConfigProvider` (три метода: `get_config`, `set_config`, `get_schema`)
+2. Зарегистрируй entry point `ai_mini_box.config_provider`
+
+Подробнее: `docs/plugins/12-config-provider.md`, `docs/specs/28-config-provider-core.md`.
+
 ## Чек-лист перед публикацией
 
 - [ ] Имя: `ai-mini-box-{name}`
 - [ ] Entry point `ai_mini_box.tools` зарегистрирован
+- [ ] ConfigProvider зарегистрирован (если плагин имеет настройки для веба)
 - [ ] `"ai-mini-box-core>=5.0.0"` в зависимостях
 - [ ] Тесты проходят: `pytest tests/ -v`
 - [ ] README с установкой и примерами
